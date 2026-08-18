@@ -1,0 +1,25 @@
+@IdentityService.Api_HostAddress = http://localhost:5024
+
+GET {{IdentityService.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
+
+POST {{IdentityService.Api_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "secret"
+}
+
+###
+
+POST {{IdentityService.Api_HostAddress}}/api/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "paste-the-128-character-token-from-login"
+}
+
+###
