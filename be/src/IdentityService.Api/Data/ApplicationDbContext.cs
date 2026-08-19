@@ -18,6 +18,14 @@ public sealed class ApplicationDbContext(
     public DbSet<EventTranslation> EventTranslations => Set<EventTranslation>();
     public DbSet<Reminder> Reminders => Set<Reminder>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<Project> Projects => Set<Project>();
+    public DbSet<ProjectTranslation> ProjectTranslations => Set<ProjectTranslation>();
+    public DbSet<Principal> Principals => Set<Principal>();
+    public DbSet<Scope> Scopes => Set<Scope>();
+    public DbSet<Permission> Permissions => Set<Permission>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<RoleAssignment> RoleAssignments => Set<RoleAssignment>();
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {

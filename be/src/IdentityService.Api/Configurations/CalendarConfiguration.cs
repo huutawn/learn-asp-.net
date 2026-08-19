@@ -4,19 +4,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace IdentityService.Api.Configurations;
 
-public sealed class GroupConfiguration : IEntityTypeConfiguration<Group>
-{
-    public void Configure(EntityTypeBuilder<Group> builder)
-    {
-        builder.ToTable("groups");
-        builder.HasKey(x => x.Id);
-        builder.Property(x => x.Id).HasColumnName("id");
-        builder.Property(x => x.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
-        builder.Property(x => x.Description).HasColumnName("description").HasMaxLength(1_000);
-        builder.Property(x => x.Type).HasColumnName("type").HasMaxLength(64).IsRequired();
-        builder.HasIndex(x => new { x.Name, x.Type }).IsUnique();
-    }
-}
 
 public sealed class PositionConfiguration : IEntityTypeConfiguration<Position>
 {

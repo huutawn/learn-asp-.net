@@ -25,9 +25,16 @@ public sealed class GroupService(
             throw new ConflictException("A group with this name and type already exists.");
         }
 
+        var principalId = Guid.NewGuid();
         var group = new Group
         {
             Id = Guid.NewGuid(),
+            PrincipalId = principalId,
+            Principal = new Principal
+            {
+                Id = principalId,
+                Type = PrincipalType.Group
+            },
             Name = name,
             Description = string.IsNullOrWhiteSpace(request.Description)
                 ? null

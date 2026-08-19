@@ -90,9 +90,11 @@ builder.Services.AddScoped<IUserRepository, UserRepository>(); //add trainsient 
 builder.Services.AddScoped<ISessionRepository, SessionRepository>();
 builder.Services.AddScoped<IGroupRepository, GroupRepository>();
 builder.Services.AddScoped<ICalendarRepository, CalendarRepository>();
+builder.Services.AddScoped<IRbacRepository, RbacRepository>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IGroupService, GroupService>();
+builder.Services.AddScoped<IRbacService, RbacService>();
 builder.Services.AddSingleton<INotificationWebSocketService, NotificationWebSocketService>();
 builder.Services.AddScoped<ICalendarService, CalendarService>();
 builder.Services.AddSingleton(TimeProvider.System);
@@ -226,7 +228,7 @@ app.Map("/ws/notifications", async (HttpContext context, INotificationWebSocketS
         context.Response.StatusCode = StatusCodes.Status400BadRequest;
         await context.Response.WriteAsync("WebSocket connections only.");
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 app.UseAuthentication();
 app.UseAuthorization();

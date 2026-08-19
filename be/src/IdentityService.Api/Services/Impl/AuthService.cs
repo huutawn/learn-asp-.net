@@ -35,10 +35,17 @@ public sealed class AuthService(
         }
 
         var now = DateTimeOffset.UtcNow;
+        var principalId = Guid.NewGuid();
 
         var user = new User
         {
             Id = Guid.NewGuid(),
+            PrincipalId = principalId,
+            Principal = new Principal
+            {
+                Id = principalId,
+                Type = PrincipalType.User
+            },
 
             Email = email,
 

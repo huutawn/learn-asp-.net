@@ -52,7 +52,14 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasMaxLength(32)
             .HasDefaultValue(UserRole.User)
             .IsRequired();
+        builder.Property(u => u.PrincipalId)
+            .HasColumnName("principal_id");
 
+        builder.HasOne(u => u.Principal)
+            .WithOne(p => p.User)
+            .HasForeignKey<User>(u => u.PrincipalId)
+            .IsRequired()
+            .OnDelete(DeleteBehavior.Cascade);
         builder.Property(u => u.CreatedAtUtc)
             .HasColumnName("created_at_utc")
             .IsRequired();
