@@ -10,75 +10,74 @@ public sealed class RbacService(
     TimeProvider timeProvider) : IRbacService
 {
     // Principal
-    public async Task<PrincipalResponse> CreatePrincipalAsync(CreatePrincipalReq req, CancellationToken cancellationToken = default)
-    {
-        if (!Enum.TryParse<PrincipalType>(req.Type, true, out var principalType))
-        {
-            throw new BadRequestException($"Invalid principal type: '{req.Type}'. Allowed values: {string.Join(", ", Enum.GetNames<PrincipalType>())}");
-        }
-
-        var principal = new Principal
-        {
-            Id = Guid.NewGuid(),
-            Type = principalType
-        };
-
-        await rbacRepository.CreatePrincipalAsync(principal, cancellationToken);
-        return new PrincipalResponse(principal.Id, principal.Type.ToString());
-    }
-
     public async Task<PrincipalResponse?> GetPrincipalByIdAsync(Guid principalId, CancellationToken cancellationToken = default)
     {
-        var principal = await rbacRepository.GetPrincipalByIdAsync(principalId, cancellationToken);
-        return principal is null ? null : new PrincipalResponse(principal.Id, principal.Type.ToString());
+        var principal = await rbacRepository.GetPrincipalDetailsByIdAsync(principalId, cancellationToken);
+        return principal is null ? throw new NotFoundException("Principal not found") : MapPrincipal(principal);
     }
 
-    public async Task<IEnumerable<PrincipalResponse>> GetAllPrincipalsAsync(CancellationToken cancellationToken = default)
+    public async Task<PrincipalSearchResponse> SearchPrincipalsAsync(
+        PrincipalSearchQuery query,
+        CancellationToken cancellationToken = default)
     {
-        var principals = await rbacRepository.GetAllPrincipalsAsync(cancellationToken);
-        return principals.Select(p => new PrincipalResponse(p.Id, p.Type.ToString()));
-    }
+        if (query.Limit is < 1 or > 100)
+            throw new BadRequestException("Limit must be between 1 and 100.");
 
-    public async Task<PrincipalForAddMemberResponse> GetPrincipalsForAddMemberAsync(CancellationToken cancellationToken = default)
-    {
-        var users = await rbacRepository.GetUsersForPrincipalSelectionAsync(cancellationToken);
-        var groups = await rbacRepository.GetGroupsForPrincipalSelectionAsync(cancellationToken);
-
-        var userResponses = users.Select(u => new PrincipalUserResponse(
-            u.PrincipalId,
-            PrincipalType.User.ToString(),
-            u.Email,
-            u.DisplayName,
-            null
-        )).ToArray();
-
-        var groupResponses = groups.Select(g => new PrincipalGroupResponse(
-            g.PrincipalId,
-            PrincipalType.Group.ToString(),
-            g.Name,
-            g.Description
-        )).ToArray();
-
-        return new PrincipalForAddMemberResponse(null, userResponses, groupResponses);
-    }
-
-    public async Task AddMemberPrincipalAsync(AddMemberPrincipalReq req, CancellationToken cancellationToken = default)
-    {
-        var principal = await rbacRepository.GetPrincipalByIdAsync(req.PrincipalId, cancellationToken);
-        if (principal is null)
+        PrincipalType? type = null;
+        if (!string.IsNullOrWhiteSpace(query.Type))
         {
-            if (!Enum.TryParse<PrincipalType>(req.Type, true, out var principalType))
+            if (!Enum.TryParse<PrincipalType>(query.Type, true, out var parsedType))
             {
-                throw new BadRequestException($"Invalid principal type: '{req.Type}'.");
+                throw new BadRequestException($"Invalid principal type: '{query.Type}'.");
             }
 
-            await rbacRepository.CreatePrincipalAsync(new Principal
-            {
-                Id = req.PrincipalId,
-                Type = principalType
-            }, cancellationToken);
+            type = parsedType;
         }
+
+        Guid? cursor = null;
+        if (!string.IsNullOrWhiteSpace(query.Cursor))
+        {
+            if (!Guid.TryParse(query.Cursor, out var parsedCursor))
+                throw new BadRequestException("Cursor must be a principal ID.");
+            cursor = parsedCursor;
+        }
+
+        var principals = await rbacRepository.SearchPrincipalsAsync(
+            type, query.Search, cursor, query.Limit, query.Available, query.ScopeId, cancellationToken);
+        var hasNextPage = principals.Count > query.Limit;
+        var items = principals.Take(query.Limit).Select(MapPrincipal).ToArray();
+        return new PrincipalSearchResponse(
+            items,
+            hasNextPage ? items[^1].PrincipalId.ToString("N") : null);
     }
+
+    public async Task SetPrincipalAvailabilityAsync(
+        Guid principalId,
+        bool available,
+        CancellationToken cancellationToken = default)
+    {
+        var principal = await rbacRepository.GetPrincipalByIdAsync(principalId, cancellationToken)
+            ?? throw new NotFoundException("Principal not found.");
+        principal.Available = available;
+        await rbacRepository.SaveChangesAsync(cancellationToken);
+    }
+
+    private static PrincipalResponse MapPrincipal(Principal principal) => principal.Type switch
+    {
+        PrincipalType.User when principal.User is not null => new(
+            principal.Id, principal.Type.ToString(), principal.User.DisplayName, null,
+            principal.User.Email, principal.Available, null),
+        PrincipalType.Group when principal.Group is not null => new(
+            principal.Id, principal.Type.ToString(), principal.Group.Name,
+            principal.Group.Description, null, principal.Available, principal.Group.ScopeId),
+        PrincipalType.Team when principal.Team is not null => new(
+            principal.Id, principal.Type.ToString(), principal.Team.Name,
+            principal.Team.Description, null, principal.Available, principal.Team.ScopeId),
+        PrincipalType.Project when principal.Project is not null => new(
+            principal.Id, principal.Type.ToString(), principal.Project.Name,
+            principal.Project.Description, null, principal.Available, principal.Project.ScopeId),
+        _ => new(principal.Id, principal.Type.ToString(), string.Empty, null, null, principal.Available, null)
+    };
 
     // Scope
     public async Task<ScopeResponse> CreateScopeAsync(CreateScopeReq req, CancellationToken cancellationToken = default)
@@ -264,6 +263,10 @@ public sealed class RbacService(
 
         var principal = await rbacRepository.GetPrincipalByIdAsync(req.PrincipalId, cancellationToken)
             ?? throw new NotFoundException("Principal not found.");
+        if (!principal.Available)
+        {
+            throw new BadRequestException("Unavailable principals cannot be assigned a role.");
+        }
 
         Scope scope;
         if (req.ScopeId.HasValue)
@@ -343,6 +346,12 @@ public sealed class RbacService(
         await rbacRepository.DeleteRoleAssignmentAsync(assignment, cancellationToken);
         return true;
     }
+
+    public Task<bool> RemovePrincipalFromScopeAsync(
+        Guid principalId,
+        Guid scopeId,
+        CancellationToken cancellationToken = default) =>
+        rbacRepository.DeleteRoleAssignmentsAsync(principalId, scopeId, cancellationToken);
 
     // Authorization evaluation
     public async Task<CheckPermissionResponse> CheckPermissionAsync(

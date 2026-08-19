@@ -25,6 +25,11 @@ public sealed class GroupService(
             throw new ConflictException("A group with this name and type already exists.");
         }
 
+        if (request.ScopeId.HasValue && !await groupRepository.ScopeExistsAsync(request.ScopeId.Value, cancellationToken))
+        {
+            throw new NotFoundException("Scope not found.");
+        }
+
         var principalId = Guid.NewGuid();
         var group = new Group
         {
@@ -39,10 +44,11 @@ public sealed class GroupService(
             Description = string.IsNullOrWhiteSpace(request.Description)
                 ? null
                 : request.Description.Trim(),
+            ScopeId = request.ScopeId,
             Type = type
         };
         await groupRepository.AddAsync(group, cancellationToken);
-        return new GroupResponse(group.Id, group.Name, group.Description, group.Type);
+        return new GroupResponse(group.Id, group.PrincipalId, group.Name, group.Description, group.Type, group.ScopeId);
     }
 
     public async Task<bool> SetMemberAsync(

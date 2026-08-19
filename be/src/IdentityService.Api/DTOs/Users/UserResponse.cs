@@ -5,6 +5,7 @@ namespace IdentityService.Api.DTOs.Users;
 
 public sealed record UserResponse(
     Guid Id,
+    Guid PrincipalId,
     string Email,
     string DisplayName,
     bool EmailVerified,

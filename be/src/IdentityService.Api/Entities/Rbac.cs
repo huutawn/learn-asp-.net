@@ -38,7 +38,8 @@ public enum PrincipalType
 {
     User,
     Team,
-    Group
+    Group,
+    Project
 }
 
 public sealed class Principal
@@ -46,8 +47,11 @@ public sealed class Principal
     public Guid Id { get; set; }
 
     public PrincipalType Type { get; set; }
+    public bool Available { get; set; } = true;
     public User? User { get; set; }
     public Group? Group { get; set; }
+    public Team? Team { get; set; }
+    public Project? Project { get; set; }
 
     public ICollection<RoleAssignment> Assignments { get; set; }
         = new List<RoleAssignment>();

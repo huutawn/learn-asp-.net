@@ -12,34 +12,65 @@ public sealed class RbacRepository(ApplicationDbContext dbContext) : IRbacReposi
         CancellationToken cancellationToken = default) =>
         dbContext.Principals.FindAsync(new object?[] { principalId }, cancellationToken).AsTask();
 
-    public Task<Principal?> GetPrincipalByIdAsync(
+    public Task<Principal?> GetPrincipalDetailsByIdAsync(
         Guid principalId,
-        bool includeUsers,
-        bool includeGroups,
+        CancellationToken cancellationToken = default) =>
+        PrincipalDetailsQuery()
+            .FirstOrDefaultAsync(p => p.Id == principalId, cancellationToken);
+
+    public async Task<IReadOnlyList<Principal>> SearchPrincipalsAsync(
+        PrincipalType? type,
+        string? search,
+        Guid? cursor,
+        int limit,
+        bool? available,
+        Guid? scopeId,
         CancellationToken cancellationToken = default)
     {
-        IQueryable<Principal> query = dbContext.Principals;
+        var query = PrincipalDetailsQuery();
 
-        if (includeUsers)
-            query = query.Include(p => p.User);
+        if (type.HasValue)
+        {
+            query = query.Where(p => p.Type == type.Value);
+        }
 
-        if (includeGroups)
-            query = query.Include(p => p.Group);
+        if (available.HasValue)
+        {
+            query = query.Where(p => p.Available == available.Value);
+        }
 
-        return query.FirstOrDefaultAsync(p => p.Id == principalId, cancellationToken);
-    }
+        if (scopeId.HasValue)
+        {
+            query = query.Where(p => p.Assignments.Any(a => a.ScopeId == scopeId.Value));
+        }
 
-    public async Task<Principal> CreatePrincipalAsync(Principal principal, CancellationToken cancellationToken = default)
-    {
-        dbContext.Principals.Add(principal);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return principal;
-    }
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var pattern = search.Trim().ToLower();
+            query = query.Where(p =>
+                (p.User != null && (p.User.DisplayName.ToLower().Contains(pattern) || p.User.Email.ToLower().Contains(pattern))) ||
+                (p.Group != null && p.Group.Name.ToLower().Contains(pattern)) ||
+                (p.Team != null && p.Team.Name.ToLower().Contains(pattern)) ||
+                (p.Project != null && p.Project.Name.ToLower().Contains(pattern)));
+        }
 
-    public async Task<IEnumerable<Principal>> GetAllPrincipalsAsync(CancellationToken cancellationToken = default) =>
-        await dbContext.Principals
+        if (cursor.HasValue)
+        {
+            query = query.Where(p => p.Id.CompareTo(cursor.Value) > 0);
+        }
+
+        return await query
             .AsNoTracking()
+            .OrderBy(p => p.Id)
+            .Take(limit + 1)
             .ToListAsync(cancellationToken);
+    }
+    private IQueryable<Principal> PrincipalDetailsQuery() =>
+        dbContext.Principals
+            .Include(p => p.User)
+            .Include(p => p.Group)
+            .Include(p => p.Team)
+            .Include(p => p.Project);
 
     // Scope
     public async Task<Scope> CreateScopeAsync(Scope scope, CancellationToken cancellationToken = default)
@@ -252,7 +283,21 @@ public sealed class RbacRepository(ApplicationDbContext dbContext) : IRbacReposi
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    // Evaluation & Candidate Selection
+    public async Task<bool> DeleteRoleAssignmentsAsync(
+        Guid principalId,
+        Guid scopeId,
+        CancellationToken cancellationToken = default)
+    {
+        var assignments = await dbContext.RoleAssignments
+            .Where(x => x.PrincipalId == principalId && x.ScopeId == scopeId)
+            .ToListAsync(cancellationToken);
+        if (assignments.Count == 0) return false;
+        dbContext.RoleAssignments.RemoveRange(assignments);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    // Evaluation
     public async Task<IEnumerable<string>> GetPermissionsForPrincipalAsync(
         Guid principalId,
         Guid? scopeId = null,
@@ -264,7 +309,12 @@ public sealed class RbacRepository(ApplicationDbContext dbContext) : IRbacReposi
             .Include(p => p.User)
             .FirstOrDefaultAsync(p => p.Id == principalId, cancellationToken);
 
-        if (principal?.User is not null)
+        if (principal is null || !principal.Available)
+        {
+            return [];
+        }
+
+        if (principal.User is not null)
         {
             var groupPrincipalIds = await (
                 from ug in dbContext.UserGroups
@@ -276,8 +326,13 @@ public sealed class RbacRepository(ApplicationDbContext dbContext) : IRbacReposi
             principalIds.AddRange(groupPrincipalIds);
         }
 
+        var availablePrincipalIds = await dbContext.Principals
+            .Where(p => principalIds.Contains(p.Id) && p.Available)
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
+
         var query = dbContext.RoleAssignments
-            .Where(ra => principalIds.Contains(ra.PrincipalId));
+            .Where(ra => availablePrincipalIds.Contains(ra.PrincipalId));
 
         if (scopeId.HasValue)
         {
@@ -302,20 +357,6 @@ public sealed class RbacRepository(ApplicationDbContext dbContext) : IRbacReposi
         var permissions = await GetPermissionsForPrincipalAsync(principalId, scopeId, cancellationToken);
         return permissions.Any(p => p.Equals(permissionName, StringComparison.OrdinalIgnoreCase));
     }
-
-    public async Task<IEnumerable<User>> GetUsersForPrincipalSelectionAsync(CancellationToken cancellationToken = default) =>
-        await dbContext.Users
-            .Include(u => u.Principal)
-            .AsNoTracking()
-            .OrderBy(u => u.DisplayName)
-            .ToListAsync(cancellationToken);
-
-    public async Task<IEnumerable<Group>> GetGroupsForPrincipalSelectionAsync(CancellationToken cancellationToken = default) =>
-        await dbContext.Groups
-            .Include(g => g.Principal)
-            .AsNoTracking()
-            .OrderBy(g => g.Name)
-            .ToListAsync(cancellationToken);
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         dbContext.SaveChangesAsync(cancellationToken);

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -15,15 +15,13 @@ namespace IdentityService.Api.Migrations
                 name: "principal_id",
                 table: "users",
                 type: "uuid",
-                nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                nullable: true);
 
             migrationBuilder.AddColumn<Guid>(
                 name: "principal_id",
                 table: "groups",
                 type: "uuid",
-                nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                nullable: true);
 
             migrationBuilder.AddColumn<Guid>(
                 name: "scope_id",
@@ -195,6 +193,38 @@ namespace IdentityService.Api.Migrations
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
                 });
+
+            migrationBuilder.Sql(@"
+                INSERT INTO principals (id, type)
+                SELECT id, 'User' FROM users
+                ON CONFLICT (id) DO NOTHING;
+
+                UPDATE users SET principal_id = id WHERE principal_id IS NULL;
+
+                INSERT INTO principals (id, type)
+                SELECT id, 'Group' FROM groups
+                ON CONFLICT (id) DO NOTHING;
+
+                UPDATE groups SET principal_id = id WHERE principal_id IS NULL;
+            ");
+
+            migrationBuilder.AlterColumn<Guid>(
+                name: "principal_id",
+                table: "users",
+                type: "uuid",
+                nullable: false,
+                oldClrType: typeof(Guid),
+                oldType: "uuid",
+                oldNullable: true);
+
+            migrationBuilder.AlterColumn<Guid>(
+                name: "principal_id",
+                table: "groups",
+                type: "uuid",
+                nullable: false,
+                oldClrType: typeof(Guid),
+                oldType: "uuid",
+                oldNullable: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_users_principal_id",

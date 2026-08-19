@@ -72,6 +72,7 @@ public sealed class AuthService(
 
         return new RegisterResponse(
             user.Id,
+            user.PrincipalId,
             user.Email,
             user.DisplayName,
             user.CreatedAtUtc);

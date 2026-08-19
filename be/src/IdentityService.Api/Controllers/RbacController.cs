@@ -12,20 +12,12 @@ using Microsoft.AspNetCore.Mvc;
 public sealed class RbacController(IRbacService rbacService) : ControllerBase
 {
     // Principals
-    [Authorize(Roles = nameof(UserRole.Admin))]
-    [HttpPost("principals")]
-    public async Task<ActionResult<PrincipalResponse>> CreatePrincipal(
-        [FromBody] CreatePrincipalReq request,
+    [HttpGet("principals")]
+    public async Task<ActionResult<PrincipalSearchResponse>> SearchPrincipals(
+        [FromQuery] PrincipalSearchQuery query,
         CancellationToken cancellationToken)
     {
-        var result = await rbacService.CreatePrincipalAsync(request, cancellationToken);
-        return Created($"api/rbac/principals/{result.Id}", result);
-    }
-
-    [HttpGet("principals")]
-    public async Task<ActionResult<IEnumerable<PrincipalResponse>>> GetAllPrincipals(CancellationToken cancellationToken)
-    {
-        var result = await rbacService.GetAllPrincipalsAsync(cancellationToken);
+        var result = await rbacService.SearchPrincipalsAsync(query, cancellationToken);
         return Ok(result);
     }
 
@@ -36,20 +28,14 @@ public sealed class RbacController(IRbacService rbacService) : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
-    [HttpGet("principals/for-add-member")]
-    public async Task<ActionResult<PrincipalForAddMemberResponse>> GetPrincipalsForAddMember(CancellationToken cancellationToken)
-    {
-        var result = await rbacService.GetPrincipalsForAddMemberAsync(cancellationToken);
-        return Ok(result);
-    }
-
     [Authorize(Roles = nameof(UserRole.Admin))]
-    [HttpPost("principals/add-member")]
-    public async Task<IActionResult> AddMemberPrincipal(
-        [FromBody] AddMemberPrincipalReq request,
+    [HttpPatch("principals/{id:guid}/availability")]
+    public async Task<IActionResult> SetPrincipalAvailability(
+        Guid id,
+        SetPrincipalAvailabilityRequest request,
         CancellationToken cancellationToken)
     {
-        await rbacService.AddMemberPrincipalAsync(request, cancellationToken);
+        await rbacService.SetPrincipalAvailabilityAsync(id, request.Available, cancellationToken);
         return NoContent();
     }
 
@@ -190,6 +176,20 @@ public sealed class RbacController(IRbacService rbacService) : ControllerBase
     {
         var deleted = await rbacService.DeleteRoleAssignmentAsync(assignmentId, cancellationToken);
         return deleted ? NoContent() : NotFound();
+    }
+
+    [Authorize(Roles = nameof(UserRole.Admin))]
+    [HttpDelete("scopes/{scopeId:guid}/principals/{principalId:guid}")]
+    public async Task<IActionResult> RemovePrincipalFromScope(
+        Guid scopeId,
+        Guid principalId,
+        CancellationToken cancellationToken)
+    {
+        var removed = await rbacService.RemovePrincipalFromScopeAsync(
+            principalId,
+            scopeId,
+            cancellationToken);
+        return removed ? NoContent() : NotFound();
     }
 
     // Permission Checking / Introspection

@@ -16,28 +16,17 @@ public sealed record ScopeResponse(
     string Type);
 
 public sealed record PrincipalResponse(
-    Guid Id,
-    string Type);
-
-public sealed record PrincipalUserResponse(
-    Guid Id,
-    string Type,
-    string Email,
-    string? Name,
-    string? Description
-);
-
-public sealed record PrincipalGroupResponse(
-    Guid Id,
+    Guid PrincipalId,
     string Type,
     string Name,
-    string? Description
-);
+    string? Description,
+    string? Email,
+    bool Available,
+    Guid? ScopeId);
 
-public sealed record PrincipalForAddMemberResponse(
-    Guid? Id,
-    PrincipalUserResponse[] Users,
-    PrincipalGroupResponse[] Groups);
+public sealed record PrincipalSearchResponse(
+    IReadOnlyList<PrincipalResponse> Items,
+    string? NextCursor);
 
 public sealed record RoleAssignmentResponse(
     Guid Id,

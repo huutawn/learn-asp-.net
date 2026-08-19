@@ -20,6 +20,7 @@ public sealed class ApplicationDbContext(
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectTranslation> ProjectTranslations => Set<ProjectTranslation>();
+    public DbSet<Team> Teams => Set<Team>();
     public DbSet<Principal> Principals => Set<Principal>();
     public DbSet<Scope> Scopes => Set<Scope>();
     public DbSet<Permission> Permissions => Set<Permission>();

@@ -58,6 +58,7 @@ public class UserService : IUserService
     private static UserResponse Map(User user) =>
         new(
             user.Id,
+            user.PrincipalId,
             user.Email,
             user.DisplayName,
             user.EmailVerified,

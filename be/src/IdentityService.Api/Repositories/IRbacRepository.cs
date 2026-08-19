@@ -6,9 +6,15 @@ public interface IRbacRepository
 {
     // Principal
     Task<Principal?> GetPrincipalByIdAsync(Guid principalId, CancellationToken cancellationToken = default);
-    Task<Principal?> GetPrincipalByIdAsync(Guid principalId, bool includeUsers, bool includeGroups, CancellationToken cancellationToken = default);
-    Task<Principal> CreatePrincipalAsync(Principal principal, CancellationToken cancellationToken = default);
-    Task<IEnumerable<Principal>> GetAllPrincipalsAsync(CancellationToken cancellationToken = default);
+    Task<Principal?> GetPrincipalDetailsByIdAsync(Guid principalId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Principal>> SearchPrincipalsAsync(
+        PrincipalType? type,
+        string? search,
+        Guid? cursor,
+        int limit,
+        bool? available,
+        Guid? scopeId,
+        CancellationToken cancellationToken = default);
 
     // Scope
     Task<Scope> CreateScopeAsync(Scope scope, CancellationToken cancellationToken = default);
@@ -52,12 +58,10 @@ public interface IRbacRepository
     Task<IEnumerable<RoleAssignment>> GetRoleAssignmentsByPrincipalIdAsync(Guid principalId, CancellationToken cancellationToken = default);
     Task<IEnumerable<RoleAssignment>> GetRoleAssignmentsByRoleIdAsync(Guid roleId, CancellationToken cancellationToken = default);
     Task DeleteRoleAssignmentAsync(RoleAssignment roleAssignment, CancellationToken cancellationToken = default);
+    Task<bool> DeleteRoleAssignmentsAsync(Guid principalId, Guid scopeId, CancellationToken cancellationToken = default);
 
-    // Evaluation & Candidate Selection
+    // Evaluation
     Task<IEnumerable<string>> GetPermissionsForPrincipalAsync(Guid principalId, Guid? scopeId = null, CancellationToken cancellationToken = default);
     Task<bool> HasPermissionAsync(Guid principalId, string permissionName, Guid? scopeId = null, CancellationToken cancellationToken = default);
-    Task<IEnumerable<User>> GetUsersForPrincipalSelectionAsync(CancellationToken cancellationToken = default);
-    Task<IEnumerable<Group>> GetGroupsForPrincipalSelectionAsync(CancellationToken cancellationToken = default);
-
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

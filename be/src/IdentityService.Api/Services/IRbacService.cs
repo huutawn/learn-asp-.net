@@ -5,11 +5,9 @@ using IdentityService.Api.DTOs.Rbac;
 public interface IRbacService
 {
     // Principal
-    Task<PrincipalResponse> CreatePrincipalAsync(CreatePrincipalReq req, CancellationToken cancellationToken = default);
     Task<PrincipalResponse?> GetPrincipalByIdAsync(Guid principalId, CancellationToken cancellationToken = default);
-    Task<IEnumerable<PrincipalResponse>> GetAllPrincipalsAsync(CancellationToken cancellationToken = default);
-    Task<PrincipalForAddMemberResponse> GetPrincipalsForAddMemberAsync(CancellationToken cancellationToken = default);
-    Task AddMemberPrincipalAsync(AddMemberPrincipalReq req, CancellationToken cancellationToken = default);
+    Task<PrincipalSearchResponse> SearchPrincipalsAsync(PrincipalSearchQuery query, CancellationToken cancellationToken = default);
+    Task SetPrincipalAvailabilityAsync(Guid principalId, bool available, CancellationToken cancellationToken = default);
 
     // Scope
     Task<ScopeResponse> CreateScopeAsync(CreateScopeReq req, CancellationToken cancellationToken = default);
@@ -34,6 +32,7 @@ public interface IRbacService
     Task<IEnumerable<RoleAssignmentResponse>> GetRoleAssignmentsByPrincipalIdAsync(Guid principalId, CancellationToken cancellationToken = default);
     Task<IEnumerable<RoleAssignmentResponse>> GetRoleAssignmentsByRoleIdAsync(Guid roleId, CancellationToken cancellationToken = default);
     Task<bool> DeleteRoleAssignmentAsync(Guid assignmentId, CancellationToken cancellationToken = default);
+    Task<bool> RemovePrincipalFromScopeAsync(Guid principalId, Guid scopeId, CancellationToken cancellationToken = default);
 
     // Authorization evaluation
     Task<CheckPermissionResponse> CheckPermissionAsync(Guid principalId, string permissionName, Guid? scopeId = null, CancellationToken cancellationToken = default);

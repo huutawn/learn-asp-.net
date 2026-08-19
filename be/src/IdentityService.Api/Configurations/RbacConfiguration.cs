@@ -17,7 +17,12 @@ public sealed class PrincipalConfiguration : IEntityTypeConfiguration<Principal>
             .HasConversion<string>()
             .IsRequired()
             .HasMaxLength(100);
+        builder.Property(p => p.Available)
+            .HasColumnName("available")
+            .HasDefaultValue(true)
+            .IsRequired();
         builder.HasIndex(p => p.Type);
+        builder.HasIndex(p => new { p.Available, p.Id });
     }
 }
 
@@ -138,4 +143,3 @@ public sealed class RoleAssignmentConfiguration : IEntityTypeConfiguration<RoleA
         builder.HasIndex(ra => new { ra.PrincipalId, ra.RoleId, ra.ScopeId }).IsUnique();
     }
 }
-

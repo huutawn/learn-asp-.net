@@ -2,10 +2,15 @@ namespace IdentityService.Api.DTOs.Rbac;
 
 using System.ComponentModel.DataAnnotations;
 
-public sealed record CreatePrincipalReq(
-    [param: Required, MaxLength(100)]
-    string Type
-);
+public sealed record PrincipalSearchQuery(
+    string? Type = null,
+    string? Search = null,
+    string? Cursor = null,
+    [property: Range(1, 100)] int Limit = 20,
+    bool? Available = true,
+    Guid? ScopeId = null);
+
+public sealed record SetPrincipalAvailabilityRequest(bool Available);
 
 public sealed record CreateScopeReq(
     [param: Required, MaxLength(100)]
@@ -45,11 +50,4 @@ public sealed record CreateRoleAssignmentReq(
     [param: Required]
     Guid PrincipalId,
     Guid? ScopeId = null
-);
-
-public sealed record AddMemberPrincipalReq(
-    [param: Required]
-    Guid PrincipalId,
-    [param: Required]
-    string Type
 );

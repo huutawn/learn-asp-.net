@@ -9,4 +9,4 @@ public sealed record CreateGroupReq(
     string Type,
     [param: MaxLength(1_000)]
     string? Description = null,
-    string[]? MemberIds = null);
+    Guid? ScopeId = null);
