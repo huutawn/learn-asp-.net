@@ -4,7 +4,8 @@ namespace IdentityService.Api.Services;
 
 public interface IJwtTokenService
 {
-    string Generate(
+    Task<string> GenerateAsync(
         User user,
-        DateTimeOffset expiresAtUtc);
+        DateTimeOffset expiresAtUtc,
+        CancellationToken cancellationToken = default);
 }

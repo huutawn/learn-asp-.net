@@ -1,6 +1,7 @@
 namespace IdentityService.Api.Repositories;
 
 using IdentityService.Api.Entities;
+using IdentityService.Api.Security;
 
 public interface IRbacRepository
 {
@@ -54,5 +55,6 @@ public interface IRbacRepository
     // Evaluation
     Task<IEnumerable<string>> GetPermissionsForPrincipalAsync(Guid principalId, Guid? resourcePrincipalId = null, CancellationToken cancellationToken = default);
     Task<bool> HasPermissionAsync(Guid principalId, string permissionName, Guid? resourcePrincipalId = null, CancellationToken cancellationToken = default);
+    Task<AuthorizationSnapshot> GetAuthorizationSnapshotAsync(Guid userId, CancellationToken cancellationToken = default);
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

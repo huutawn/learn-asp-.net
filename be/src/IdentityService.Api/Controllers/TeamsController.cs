@@ -15,6 +15,7 @@ public sealed class TeamsController(
     ITeamService teamService,
     IMembershipService membershipService) : ControllerBase
 {
+    [PermissionAuthorize(Permissions.TeamCreate)]
     [HttpPost]
     public async Task<ActionResult<TeamResponse>> Create(
         CreateTeamRequest request,
@@ -40,12 +41,14 @@ public sealed class TeamsController(
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken) =>
         await teamService.DeleteAsync(id, cancellationToken) ? NoContent() : NotFound();
 
+    [PermissionAuthorize(Permissions.MembershipManage, ResourceRoute = "id", ResourceType = PrincipalType.Team)]
     [HttpGet("{id:guid}/members")]
     public async Task<IActionResult> GetMembers(Guid id, CancellationToken cancellationToken) =>
         (await membershipService.GetMembersAsync(PrincipalType.Team, id, cancellationToken)) is { } members
             ? Ok(members)
             : NotFound();
 
+    [PermissionAuthorize(Permissions.MembershipManage, ResourceRoute = "id", ResourceType = PrincipalType.Team)]
     [HttpPut("{id:guid}/members/{userId:guid}")]
     public async Task<IActionResult> SetMember(
         Guid id,

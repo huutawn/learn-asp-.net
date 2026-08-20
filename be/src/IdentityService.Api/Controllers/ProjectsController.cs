@@ -14,6 +14,7 @@ public sealed class ProjectsController(
     IProjectService projectService,
     IMembershipService membershipService) : ControllerBase
 {
+    [PermissionAuthorize(Permissions.ProjectCreate)]
     [HttpPost]
     public async Task<ActionResult<ProjectResponse>> Create(
         CreateProjectRequest request,
@@ -42,6 +43,7 @@ public sealed class ProjectsController(
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken) =>
         await projectService.DeleteAsync(id, cancellationToken) ? NoContent() : NotFound();
 
+    [PermissionAuthorize(Permissions.MembershipManage, ResourceRoute = "id", ResourceType = PrincipalType.Project)]
     [HttpGet("{id:guid}/members")]
     public async Task<IActionResult> GetMembers(
         Guid id,
@@ -50,6 +52,7 @@ public sealed class ProjectsController(
             ? Ok(members)
             : NotFound();
 
+    [PermissionAuthorize(Permissions.MembershipManage, ResourceRoute = "id", ResourceType = PrincipalType.Project)]
     [HttpPut("{id:guid}/members/{userId:guid}")]
     public async Task<IActionResult> SetMember(
         Guid id,

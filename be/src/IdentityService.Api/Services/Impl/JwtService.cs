@@ -2,17 +2,21 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using IdentityService.Api.Entities;
+using IdentityService.Api.Repositories;
+using IdentityService.Api.Security;
 using Microsoft.IdentityModel.Tokens;
 
 namespace IdentityService.Api.Services;
 
 public sealed class JwtTokenService(
-    IConfiguration configuration)
+    IConfiguration configuration,
+    IRbacRepository rbacRepository)
     : IJwtTokenService
 {
-    public string Generate(
+    public async Task<string> GenerateAsync(
         User user,
-        DateTimeOffset expiresAtUtc)
+        DateTimeOffset expiresAtUtc,
+        CancellationToken cancellationToken = default)
     {
         var issuer =
             configuration["Jwt:Issuer"]
@@ -29,24 +33,22 @@ public sealed class JwtTokenService(
             ?? throw new InvalidOperationException(
                 "JWT key missing.");
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(
-                JwtRegisteredClaimNames.Sub,
-                user.Id.ToString()),
-
-            new Claim(
-                JwtRegisteredClaimNames.Email,
-                user.Email),
-
-            new Claim(
-                "display_name",
-                user.DisplayName),
-
-            new Claim(
-                "role",
-                user.Role.ToString())
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.Email, user.Email),
+            new("display_name", user.DisplayName),
+            new("role", user.Role.ToString()),
+            new("principal_id", user.PrincipalId.ToString())
         };
+
+        var snapshot = await rbacRepository.GetAuthorizationSnapshotAsync(user.Id, cancellationToken);
+        claims.AddRange(snapshot.GlobalPermissions.Select(permission => new Claim(PermissionClaimTypes.Permission, permission)));
+        if (snapshot.IsGlobalAdmin) claims.Add(new Claim(PermissionClaimTypes.RbacAdmin, "true"));
+        claims.AddRange(snapshot.OwnedResourcePrincipalIds.Select(id => new Claim(PermissionClaimTypes.ResourceOwner, id.ToString("N"))));
+        claims.AddRange(snapshot.ResourcePermissions.SelectMany(resource => resource.Permissions.Select(permission => new Claim(
+            PermissionClaimTypes.ResourcePermission,
+            PermissionClaimTypes.ResourcePermissionValue(resource.ResourcePrincipalId, permission)))));
 
         var signingKey =
             new SymmetricSecurityKey(

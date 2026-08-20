@@ -2,14 +2,17 @@ using IdentityService.Api.DTOs.Projects;
 using IdentityService.Api.Entities;
 using IdentityService.Api.Exceptions;
 using IdentityService.Api.Repositories;
+using IdentityService.Api.Security;
 
 namespace IdentityService.Api.Services;
 
-public sealed class ProjectService(IProjectRepository projectRepository, TimeProvider timeProvider, IMembershipRepository membershipRepository) : IProjectService
+public sealed class ProjectService(IProjectRepository projectRepository, TimeProvider timeProvider, IMembershipRepository membershipRepository, IHttpContextAccessor httpContextAccessor) : IProjectService
 {
     public async Task<ProjectResponse> CreateAsync(CreateProjectRequest request, Guid ownerId, CancellationToken cancellationToken)
     {
-        if (!await membershipRepository.IsAdminAsync(ownerId, cancellationToken) && !await membershipRepository.HasPermissionAsync(ownerId, "project.create", Guid.Empty, cancellationToken))
+        var claims = httpContextAccessor.HttpContext?.User;
+        if ((claims is null || (!PermissionClaims.IsAdmin(claims) && !PermissionClaims.HasGlobal(claims, Permissions.ProjectCreate))) &&
+            !await membershipRepository.IsAdminAsync(ownerId, cancellationToken) && !await membershipRepository.HasPermissionAsync(ownerId, Permissions.ProjectCreate, Guid.Empty, cancellationToken))
             throw new ForbiddenException("Missing project.create permission.");
         await ValidateReferencesAsync(ownerId, cancellationToken);
         var now = timeProvider.GetUtcNow();

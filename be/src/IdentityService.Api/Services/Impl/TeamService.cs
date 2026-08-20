@@ -2,20 +2,24 @@ using IdentityService.Api.DTOs.Teams;
 using IdentityService.Api.Entities;
 using IdentityService.Api.Exceptions;
 using IdentityService.Api.Repositories;
+using IdentityService.Api.Security;
 
 namespace IdentityService.Api.Services;
 
 public sealed class TeamService(
     ITeamRepository teamRepository,
     TimeProvider timeProvider,
-    IMembershipRepository membershipRepository) : ITeamService
+    IMembershipRepository membershipRepository,
+    IHttpContextAccessor httpContextAccessor) : ITeamService
 {
     public async Task<TeamResponse> CreateAsync(CreateTeamRequest request, Guid actorUserId, CancellationToken cancellationToken)
     {
         var name = Required(request.Name, "Team name");
         if (await teamRepository.ExistsByNameAsync(name, null, cancellationToken))
             throw new ConflictException("A team with this name already exists.");
-        if (!await membershipRepository.IsAdminAsync(actorUserId, cancellationToken) && !await membershipRepository.HasPermissionAsync(actorUserId, "team.create", Guid.Empty, cancellationToken))
+        var claims = httpContextAccessor.HttpContext?.User;
+        if ((claims is null || (!PermissionClaims.IsAdmin(claims) && !PermissionClaims.HasGlobal(claims, Permissions.TeamCreate))) &&
+            !await membershipRepository.IsAdminAsync(actorUserId, cancellationToken) && !await membershipRepository.HasPermissionAsync(actorUserId, Permissions.TeamCreate, Guid.Empty, cancellationToken))
             throw new ForbiddenException("Missing team.create permission.");
         var now = timeProvider.GetUtcNow();
         var principalId = Guid.NewGuid();

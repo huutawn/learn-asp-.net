@@ -111,7 +111,7 @@ public sealed class AuthService(
         }
 
         var now = DateTimeOffset.UtcNow;
-        var issuedTokens = IssueTokens(user, now);
+        var issuedTokens = await IssueTokensAsync(user, now, cancellationToken);
 
         await sessionRepository.CreateAsync(
             new Session
@@ -155,7 +155,7 @@ public sealed class AuthService(
         }
 
         var issuedTokens =
-            IssueTokens(session.User, now);
+            await IssueTokensAsync(session.User, now, cancellationToken);
 
         var rotated =
             await sessionRepository.RotateAsync(
@@ -176,11 +176,12 @@ public sealed class AuthService(
         return issuedTokens.Response;
     }
 
-    private (
+    private async Task<(
         LoginResponse Response,
-        string RefreshTokenHash) IssueTokens(
+        string RefreshTokenHash)> IssueTokensAsync(
             User user,
-            DateTimeOffset now)
+            DateTimeOffset now,
+            CancellationToken cancellationToken)
     {
         var accessExpiresAt = now.AddMinutes(
             configuration.GetValue<int>(
@@ -195,9 +196,10 @@ public sealed class AuthService(
 
         return (
             new LoginResponse(
-                jwtTokenService.Generate(
+                await jwtTokenService.GenerateAsync(
                     user,
-                    accessExpiresAt),
+                    accessExpiresAt,
+                    cancellationToken),
                 accessExpiresAt,
                 refreshToken,
                 refreshExpiresAt),

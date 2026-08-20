@@ -2,6 +2,7 @@ namespace IdentityService.Api.Repositories;
 
 using IdentityService.Api.Data;
 using IdentityService.Api.Entities;
+using IdentityService.Api.Security;
 using Microsoft.EntityFrameworkCore;
 
 public sealed class RbacRepository(ApplicationDbContext dbContext) : IRbacRepository
@@ -76,5 +77,45 @@ public sealed class RbacRepository(ApplicationDbContext dbContext) : IRbacReposi
         return await roles.Concat(direct).Distinct().ToListAsync(ct);
     }
     public async Task<bool> HasPermissionAsync(Guid principalId, string permissionName, Guid? resourceId = null, CancellationToken ct = default) => (await GetPermissionsForPrincipalAsync(principalId, resourceId, ct)).Any(x => x.Equals(permissionName, StringComparison.OrdinalIgnoreCase));
+    public async Task<AuthorizationSnapshot> GetAuthorizationSnapshotAsync(Guid userId, CancellationToken ct = default)
+    {
+        var user = await dbContext.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == userId, ct)
+            ?? throw new InvalidOperationException("User not found.");
+        var isGlobalAdmin = user.Role == UserRole.Admin || await dbContext.RoleAssignments.AnyAsync(x => x.SubjectPrincipalId == user.PrincipalId && x.ResourcePrincipalId == null && x.Role.Name.ToLower() == BuiltInRbacCatalog.AdminRole.ToLower(), ct);
+        if (isGlobalAdmin)
+            return new AuthorizationSnapshot([], [], [], true);
+
+        var globalRoleIds = dbContext.RoleAssignments
+            .Where(x => x.SubjectPrincipalId == user.PrincipalId && x.ResourcePrincipalId == null)
+            .Select(x => x.RoleId);
+        var globalPermissions = await dbContext.RolePermissions
+            .Where(x => globalRoleIds.Contains(x.RoleId))
+            .Select(x => x.Permission.Name)
+            .Concat(dbContext.PermissionGrants.Where(x => x.SubjectPrincipalId == user.PrincipalId && x.ResourcePrincipalId == null).Select(x => x.Permission.Name))
+            .Distinct()
+            .ToListAsync(ct);
+
+        var memberships = await dbContext.PrincipalMemberships.AsNoTracking()
+            .Where(x => x.UserId == userId && x.LeftAtUtc == null)
+            .Select(x => new { x.PrincipalId, x.IsOwner })
+            .ToListAsync(ct);
+        var resourceIds = memberships.Select(x => x.PrincipalId).ToArray();
+        if (resourceIds.Length == 0)
+            return new AuthorizationSnapshot(globalPermissions, [], [], false);
+
+        var roleAssignments = await dbContext.RoleAssignments
+            .Where(x => x.SubjectPrincipalId == user.PrincipalId && x.ResourcePrincipalId.HasValue && resourceIds.Contains(x.ResourcePrincipalId.Value))
+            .SelectMany(x => x.Role.RolePermissions.Select(rp => new { ResourcePrincipalId = x.ResourcePrincipalId!.Value, Permission = rp.Permission.Name }))
+            .ToListAsync(ct);
+        var directPermissions = await dbContext.PermissionGrants
+            .Where(x => x.SubjectPrincipalId == user.PrincipalId && x.ResourcePrincipalId.HasValue && resourceIds.Contains(x.ResourcePrincipalId.Value))
+            .Select(x => new { ResourcePrincipalId = x.ResourcePrincipalId!.Value, Permission = x.Permission.Name })
+            .ToListAsync(ct);
+        var resourcePermissions = roleAssignments.Concat(directPermissions)
+            .GroupBy(x => x.ResourcePrincipalId)
+            .Select(x => new ResourcePermissionSnapshot(x.Key, x.Select(y => y.Permission).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()))
+            .ToArray();
+        return new AuthorizationSnapshot(globalPermissions, resourcePermissions, memberships.Where(x => x.IsOwner).Select(x => x.PrincipalId).ToArray(), false);
+    }
     public Task SaveChangesAsync(CancellationToken ct = default) => dbContext.SaveChangesAsync(ct);
 }

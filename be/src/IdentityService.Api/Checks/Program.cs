@@ -2,6 +2,10 @@ using IdentityService.Api.Entities;
 using IdentityService.Api.Repositories;
 using IdentityService.Api.Services;
 using IdentityService.Api.DTOs.Members;
+using IdentityService.Api.Security;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 
 var user = new User
 {
@@ -13,7 +17,7 @@ var user = new User
     CreatedAtUtc = DateTimeOffset.UnixEpoch
 };
 var repository = new FakeMembershipRepository(user);
-var service = new MembershipService(repository, TimeProvider.System);
+var service = new MembershipService(repository, TimeProvider.System, new HttpContextAccessor());
 
 foreach (var type in new[] { PrincipalType.Group, PrincipalType.Team, PrincipalType.Project })
 {
@@ -28,6 +32,28 @@ foreach (var type in new[] { PrincipalType.Group, PrincipalType.Team, PrincipalT
 }
 
 Assert(!await service.SetMemberAsync(PrincipalType.Group, Guid.NewGuid(), user.Id, user.Id, new SetMemberRequest(), default));
+
+var globalAuthorization = new AuthorizationHandlerContext(
+    [new PermissionRequirement(Permissions.GroupCreate, null, null)],
+    new ClaimsPrincipal(new ClaimsIdentity([new Claim(PermissionClaimTypes.Permission, Permissions.GroupCreate)], "check")),
+    null);
+await new PermissionAuthorizationHandler(repository).HandleAsync(globalAuthorization);
+Assert(globalAuthorization.HasSucceeded);
+
+var resourcePrincipalId = Guid.NewGuid();
+var teamResourceId = Guid.NewGuid();
+repository.AddResource(PrincipalType.Team, teamResourceId, resourcePrincipalId);
+var resourceContext = new DefaultHttpContext();
+resourceContext.Request.RouteValues["id"] = teamResourceId;
+var resourceAuthorization = new AuthorizationHandlerContext(
+    [new PermissionRequirement(Permissions.MembershipManage, "id", PrincipalType.Team)],
+    new ClaimsPrincipal(new ClaimsIdentity([new Claim(PermissionClaimTypes.ResourcePermission, PermissionClaimTypes.ResourcePermissionValue(resourcePrincipalId, Permissions.MembershipManage))], "check")),
+    resourceContext);
+await new PermissionAuthorizationHandler(repository).HandleAsync(resourceAuthorization);
+Assert(resourceAuthorization.HasSucceeded);
+
+var adminRole = BuiltInRbacCatalog.Roles.Single(x => x.Name == BuiltInRbacCatalog.AdminRole);
+Assert(adminRole.Permissions.Count == BuiltInRbacCatalog.AllPermissions.Count);
 
 static void Assert(bool condition)
 {

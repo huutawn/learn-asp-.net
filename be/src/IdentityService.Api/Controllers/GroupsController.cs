@@ -15,6 +15,7 @@ public sealed class GroupsController(
     IGroupService groupService,
     IMembershipService membershipService) : ControllerBase
 {
+    [PermissionAuthorize(Permissions.GroupCreate)]
     [HttpPost]
     public async Task<ActionResult<GroupResponse>> CreateAsync(
         CreateGroupReq request,
@@ -25,12 +26,14 @@ public sealed class GroupsController(
         return Created($"api/groups/{group.Id}", group);
     }
 
+    [PermissionAuthorize(Permissions.MembershipManage, ResourceRoute = "groupId", ResourceType = PrincipalType.Group)]
     [HttpGet("{groupId:guid}/members")]
     public async Task<IActionResult> GetMembers(Guid groupId, CancellationToken cancellationToken) =>
         (await membershipService.GetMembersAsync(PrincipalType.Group, groupId, cancellationToken)) is { } members
             ? Ok(members)
             : NotFound();
 
+    [PermissionAuthorize(Permissions.MembershipManage, ResourceRoute = "groupId", ResourceType = PrincipalType.Group)]
     [HttpPut("{groupId:guid}/members/{userId:guid}")]
     public async Task<IActionResult> SetMemberAsync(
         Guid groupId,

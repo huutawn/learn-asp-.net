@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Authorization;
 using System.Text.Json.Serialization;
 using IdentityService.Api.Messaging;
 using StackExchange.Redis;
+using IdentityService.Api.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -65,6 +66,7 @@ builder.Services.AddSwaggerGen(options =>
       });
   });
 builder.Services.AddProblemDetails(); // chuẩn json cho error đỡ phải config
+builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddExceptionHandler<
     GlobalExceptionHandler>();
@@ -101,6 +103,8 @@ builder.Services.AddScoped<IMembershipService, MembershipService>();
 builder.Services.AddScoped<ITeamService, TeamService>();
 builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<IRbacService, RbacService>();
+builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services.AddSingleton<INotificationWebSocketService, NotificationWebSocketService>();
 builder.Services.AddScoped<ICalendarService, CalendarService>();
 builder.Services.AddSingleton(TimeProvider.System);
@@ -109,7 +113,7 @@ builder.Services.AddSingleton<IDelayedEmailJobQueue, RedisDelayedEmailJobQueue>(
 builder.Services.AddHostedService<DelayedEmailSchedulerWorker>();
 builder.Services.AddHostedService<FakeEmailWorker>();
 
-builder.Services.AddScoped<
+builder.Services.AddTransient<
     IPasswordHasher<User>,
     PasswordHasher<User>>();
 
@@ -201,6 +205,8 @@ builder.Services
 
 // Build
 var app = builder.Build();
+
+await RbacBootstrapper.SeedAsync(app.Services);
 
 // Middleware
 app.UseMiddleware<RequestLoggingMiddleware>();

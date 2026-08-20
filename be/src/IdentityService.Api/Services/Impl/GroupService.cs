@@ -2,13 +2,15 @@ using IdentityService.Api.DTOs.Groups;
 using IdentityService.Api.Entities;
 using IdentityService.Api.Exceptions;
 using IdentityService.Api.Repositories;
+using IdentityService.Api.Security;
 
 namespace IdentityService.Api.Services;
 
 public sealed class GroupService(
     IGroupRepository groupRepository,
     IMembershipRepository membershipRepository,
-    TimeProvider timeProvider) : IGroupService
+    TimeProvider timeProvider,
+    IHttpContextAccessor httpContextAccessor) : IGroupService
 {
     public async Task<GroupResponse> CreateAsync(
         CreateGroupReq request,
@@ -26,7 +28,9 @@ public sealed class GroupService(
         {
             throw new ConflictException("A group with this name and type already exists.");
         }
-        if (!await membershipRepository.IsAdminAsync(actorUserId, cancellationToken) && !await membershipRepository.HasPermissionAsync(actorUserId, "group.create", Guid.Empty, cancellationToken))
+        var claims = httpContextAccessor.HttpContext?.User;
+        if ((claims is null || (!PermissionClaims.IsAdmin(claims) && !PermissionClaims.HasGlobal(claims, Permissions.GroupCreate))) &&
+            !await membershipRepository.IsAdminAsync(actorUserId, cancellationToken) && !await membershipRepository.HasPermissionAsync(actorUserId, Permissions.GroupCreate, Guid.Empty, cancellationToken))
             throw new ForbiddenException("Missing group.create permission.");
 
         var principalId = Guid.NewGuid();
