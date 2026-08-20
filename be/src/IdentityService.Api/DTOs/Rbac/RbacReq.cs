@@ -6,7 +6,7 @@ public sealed record PrincipalSearchQuery(
     string? Type = null,
     string? Search = null,
     string? Cursor = null,
-    [property: Range(1, 100)] int Limit = 20,
+    [param: Range(1, 100)] int Limit = 20,
     bool? Available = true,
     Guid? ScopeId = null);
 

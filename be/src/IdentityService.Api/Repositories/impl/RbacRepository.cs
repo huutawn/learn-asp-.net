@@ -316,14 +316,12 @@ public sealed class RbacRepository(ApplicationDbContext dbContext) : IRbacReposi
 
         if (principal.User is not null)
         {
-            var groupPrincipalIds = await (
-                from ug in dbContext.UserGroups
-                join g in dbContext.Groups on ug.GroupId equals g.Id
-                where ug.UserId == principal.User.Id && ug.LeftAtUtc == null
-                select g.PrincipalId
-            ).ToListAsync(cancellationToken);
+            var memberPrincipalIds = await dbContext.PrincipalMemberships
+                .Where(x => x.UserId == principal.User.Id && x.LeftAtUtc == null)
+                .Select(x => x.PrincipalId)
+                .ToListAsync(cancellationToken);
 
-            principalIds.AddRange(groupPrincipalIds);
+            principalIds.AddRange(memberPrincipalIds);
         }
 
         var availablePrincipalIds = await dbContext.Principals

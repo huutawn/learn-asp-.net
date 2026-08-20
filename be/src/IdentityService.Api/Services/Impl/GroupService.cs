@@ -6,8 +6,7 @@ using IdentityService.Api.Repositories;
 namespace IdentityService.Api.Services;
 
 public sealed class GroupService(
-    IGroupRepository groupRepository,
-    TimeProvider timeProvider) : IGroupService
+    IGroupRepository groupRepository) : IGroupService
 {
     public async Task<GroupResponse> CreateAsync(
         CreateGroupReq request,
@@ -51,38 +50,4 @@ public sealed class GroupService(
         return new GroupResponse(group.Id, group.PrincipalId, group.Name, group.Description, group.Type, group.ScopeId);
     }
 
-    public async Task<bool> SetMemberAsync(
-        Guid groupId,
-        Guid userId,
-        bool isMember,
-        CancellationToken cancellationToken)
-    {
-        if (!await groupRepository.GroupAndUserExistAsync(groupId, userId, cancellationToken))
-        {
-            return false;
-        }
-
-        var membership = await groupRepository.GetMembershipAsync(groupId, userId, cancellationToken);
-        var now = timeProvider.GetUtcNow();
-        if (membership is null && isMember)
-        {
-            groupRepository.AddMembership(new UserGroup
-            {
-                UserId = userId,
-                GroupId = groupId,
-                JoinedAtUtc = now
-            });
-        }
-        else if (membership is not null)
-        {
-            membership.LeftAtUtc = isMember ? null : now;
-            if (isMember)
-            {
-                membership.JoinedAtUtc = now;
-            }
-        }
-
-        await groupRepository.SaveChangesAsync(cancellationToken);
-        return true;
-    }
 }

@@ -34,9 +34,11 @@ public sealed class CalendarRepository(ApplicationDbContext dbContext) : ICalend
         Guid userId,
         CancellationToken cancellationToken)
     {
-        var groupIds = await dbContext.UserGroups.AsNoTracking()
-            .Where(x => x.UserId == userId && x.LeftAtUtc == null)
-            .Select(x => x.GroupId)
+        var groupIds = await (
+                from membership in dbContext.PrincipalMemberships.AsNoTracking()
+                join grp in dbContext.Groups on membership.PrincipalId equals grp.PrincipalId
+                where membership.UserId == userId && membership.LeftAtUtc == null
+                select grp.Id)
             .ToArrayAsync(cancellationToken);
         return await dbContext.Events.AsNoTracking()
             .Include(x => x.Translations)
@@ -73,9 +75,11 @@ public sealed class CalendarRepository(ApplicationDbContext dbContext) : ICalend
         DateTimeOffset endAtUtc,
         CancellationToken cancellationToken)
     {
-        var groupIds = await dbContext.UserGroups.AsNoTracking( )
-            .Where(x => x.UserId == userId && x.LeftAtUtc == null)
-            .Select(x => x.GroupId)
+        var groupIds = await (
+                from membership in dbContext.PrincipalMemberships.AsNoTracking()
+                join grp in dbContext.Groups on membership.PrincipalId equals grp.PrincipalId
+                where membership.UserId == userId && membership.LeftAtUtc == null
+                select grp.Id)
             .ToArrayAsync(cancellationToken);
         return await dbContext.Events.AsNoTracking()
             .Include(x => x.Translations)
@@ -113,10 +117,15 @@ public sealed class CalendarRepository(ApplicationDbContext dbContext) : ICalend
             .Where(x => eventIds.Contains(x.EventId) &&
                 x.Status == EventParticipantStatus.Active && x.GroupId != null)
             .Join(
-                dbContext.UserGroups.AsNoTracking().Where(x => x.LeftAtUtc == null),
+                dbContext.Groups.AsNoTracking(),
                 participant => participant.GroupId!.Value,
-                membership => membership.GroupId,
-                (participant, membership) => new { participant.EventId, membership.UserId })
+                group => group.Id,
+                (participant, group) => new { participant, group.PrincipalId })
+            .Join(
+                dbContext.PrincipalMemberships.AsNoTracking().Where(x => x.LeftAtUtc == null),
+                item => item.PrincipalId,
+                membership => membership.PrincipalId,
+                (item, membership) => new { item.participant.EventId, membership.UserId })
             .ToArrayAsync(cancellationToken);
         var recipientIdsByEvent = directRecipients
             .Select(x => (x.EventId, x.UserId))

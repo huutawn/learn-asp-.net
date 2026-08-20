@@ -5,7 +5,6 @@ namespace IdentityService.Api.DTOs.Projects;
 public sealed record CreateProjectRequest(
     [param: Required, MaxLength(100)] string Name,
     [param: Required, MaxLength(64)] string Type,
-    [param: Required] Guid OwnerId,
     [param: MaxLength(1_000)] string? Description = null,
     Guid? ScopeId = null);
 

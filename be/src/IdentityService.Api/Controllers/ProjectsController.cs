@@ -1,5 +1,7 @@
 using IdentityService.Api.DTOs.Projects;
+using IdentityService.Api.DTOs.Members;
 using IdentityService.Api.Entities;
+using IdentityService.Api.Security;
 using IdentityService.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,16 +9,21 @@ using Microsoft.AspNetCore.Mvc;
 namespace IdentityService.Api.Controllers;
 
 [ApiController]
-[Authorize(Roles = nameof(UserRole.Admin))]
 [Route("api/projects")]
-public sealed class ProjectsController(IProjectService projectService) : ControllerBase
+public sealed class ProjectsController(
+    IProjectService projectService,
+    IMembershipService membershipService) : ControllerBase
 {
     [HttpPost]
     public async Task<ActionResult<ProjectResponse>> Create(
         CreateProjectRequest request,
         CancellationToken cancellationToken)
     {
-        var project = await projectService.CreateAsync(request, cancellationToken);
+        if (!User.TryGetUserId(out var ownerId))
+        {
+            return Unauthorized();
+        }
+        var project = await projectService.CreateAsync(request, ownerId, cancellationToken);
         return Created($"api/projects/{project.Id}", project);
     }
 
@@ -34,4 +41,27 @@ public sealed class ProjectsController(IProjectService projectService) : Control
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken) =>
         await projectService.DeleteAsync(id, cancellationToken) ? NoContent() : NotFound();
+
+    [Authorize(Roles = nameof(UserRole.Admin))]
+    [HttpGet("{id:guid}/members")]
+    public async Task<IActionResult> GetMembers(
+        Guid id,
+        CancellationToken cancellationToken) =>
+        (await membershipService.GetMembersAsync(PrincipalType.Project, id, cancellationToken)) is { } members
+            ? Ok(members)
+            : NotFound();
+
+    [Authorize(Roles = nameof(UserRole.Admin))]
+    [HttpPut("{id:guid}/members/{userId:guid}")]
+    public async Task<IActionResult> SetMember(
+        Guid id,
+        Guid userId,
+        SetMemberRequest request,
+        CancellationToken cancellationToken) =>
+        await membershipService.SetMemberAsync(
+            PrincipalType.Project,
+            id,
+            userId,
+            request.IsMember,
+            cancellationToken) ? NoContent() : NotFound();
 }

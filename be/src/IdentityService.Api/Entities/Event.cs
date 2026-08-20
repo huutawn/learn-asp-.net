@@ -108,16 +108,6 @@ public sealed class Reminder
     public DateTimeOffset UpdatedAtUtc { get; set; }
 }
 
-public sealed class UserGroup
-{
-    public Guid UserId { get; set; }
-    public User User { get; set; } = null!;
-    public Guid GroupId { get; set; }
-    public Group Group { get; set; } = null!;
-    public DateTimeOffset JoinedAtUtc { get; set; }
-    public DateTimeOffset? LeftAtUtc { get; set; }
-}
-
 public sealed class UserPosition
 {
     public Guid UserId { get; set; }

@@ -18,19 +18,19 @@ public sealed class PositionConfiguration : IEntityTypeConfiguration<Position>
     }
 }
 
-public sealed class UserGroupConfiguration : IEntityTypeConfiguration<UserGroup>
+public sealed class PrincipalMembershipConfiguration : IEntityTypeConfiguration<PrincipalMembership>
 {
-    public void Configure(EntityTypeBuilder<UserGroup> builder)
+    public void Configure(EntityTypeBuilder<PrincipalMembership> builder)
     {
-        builder.ToTable("user_groups");
-        builder.HasKey(x => new { x.UserId, x.GroupId });
+        builder.ToTable("principal_memberships");
+        builder.HasKey(x => new { x.UserId, x.PrincipalId });
         builder.Property(x => x.UserId).HasColumnName("user_id");
-        builder.Property(x => x.GroupId).HasColumnName("group_id");
+        builder.Property(x => x.PrincipalId).HasColumnName("principal_id");
         builder.Property(x => x.JoinedAtUtc).HasColumnName("joined_at_utc").IsRequired();
         builder.Property(x => x.LeftAtUtc).HasColumnName("left_at_utc");
         builder.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne(x => x.Group).WithMany().HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasIndex(x => new { x.GroupId, x.LeftAtUtc });
+        builder.HasOne(x => x.Principal).WithMany().HasForeignKey(x => x.PrincipalId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(x => new { x.PrincipalId, x.LeftAtUtc });
     }
 }
 

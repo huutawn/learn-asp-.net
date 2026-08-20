@@ -11,7 +11,7 @@ public sealed class ApplicationDbContext(
     public DbSet<Session> Sessions => Set<Session>();
     public DbSet<Group> Groups => Set<Group>();
     public DbSet<Position> Positions => Set<Position>();
-    public DbSet<UserGroup> UserGroups => Set<UserGroup>();
+    public DbSet<PrincipalMembership> PrincipalMemberships => Set<PrincipalMembership>();
     public DbSet<UserPosition> UserPositions => Set<UserPosition>();
     public DbSet<Event> Events => Set<Event>();
     public DbSet<EventParticipant> EventParticipants => Set<EventParticipant>();

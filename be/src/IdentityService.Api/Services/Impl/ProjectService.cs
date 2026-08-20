@@ -5,11 +5,13 @@ using IdentityService.Api.Repositories;
 
 namespace IdentityService.Api.Services;
 
-public sealed class ProjectService(IProjectRepository projectRepository, TimeProvider timeProvider) : IProjectService
+public sealed class ProjectService(IProjectRepository projectRepository, IRbacRepository rbacRepository, TimeProvider timeProvider) : IProjectService
 {
-    public async Task<ProjectResponse> CreateAsync(CreateProjectRequest request, CancellationToken cancellationToken)
+    public async Task<ProjectResponse> CreateAsync(CreateProjectRequest request, Guid ownerId, CancellationToken cancellationToken)
     {
-        await ValidateReferencesAsync(request.OwnerId, request.ScopeId, cancellationToken);
+        await ValidateReferencesAsync(ownerId, request.ScopeId, cancellationToken);
+        var scope = await rbacRepository.GetScopeByTypeAsync(ScopeType.Project, cancellationToken)
+            ?? throw new NotFoundException("Project scope not found.");
         var now = timeProvider.GetUtcNow();
         var principalId = Guid.NewGuid();
         var project = new Project
@@ -20,8 +22,8 @@ public sealed class ProjectService(IProjectRepository projectRepository, TimePro
             Name = Required(request.Name, "Project name"),
             Type = Required(request.Type, "Project type"),
             Description = Optional(request.Description),
-            OwnerId = request.OwnerId,
-            ScopeId = request.ScopeId,
+            OwnerId = ownerId,
+            ScopeId = scope.Id,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         };
@@ -36,13 +38,15 @@ public sealed class ProjectService(IProjectRepository projectRepository, TimePro
     {
         var project = await projectRepository.GetForUpdateAsync(id, cancellationToken);
         if (project is null) return null;
-        await ValidateReferencesAsync(request.OwnerId, request.ScopeId, cancellationToken);
+        var scope = await rbacRepository.GetScopeByTypeAsync(ScopeType.Project, cancellationToken)
+            ?? throw new NotFoundException("Project scope not found.");
+        await ValidateReferencesAsync(request.OwnerId, scope.Id, cancellationToken);
 
         project.Name = Required(request.Name, "Project name");
         project.Type = Required(request.Type, "Project type");
         project.Description = Optional(request.Description);
         project.OwnerId = request.OwnerId;
-        project.ScopeId = request.ScopeId;
+        project.ScopeId = scope.Id;
         project.UpdatedAtUtc = timeProvider.GetUtcNow();
         await projectRepository.SaveChangesAsync(cancellationToken);
         return Map(project);

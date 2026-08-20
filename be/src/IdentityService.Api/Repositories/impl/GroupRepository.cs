@@ -21,27 +21,4 @@ public sealed class GroupRepository(ApplicationDbContext dbContext) : IGroupRepo
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<bool> GroupAndUserExistAsync(
-        Guid groupId,
-        Guid userId,
-        CancellationToken cancellationToken) =>
-        await dbContext.Groups.AnyAsync(x => x.Id == groupId, cancellationToken) &&
-        await dbContext.Users.AnyAsync(x => x.Id == userId, cancellationToken);
-    public async Task<IEnumerable<Group>> GetGroupsByUserIdAsync(
-        Guid userId,
-        CancellationToken cancellationToken) =>
-        await dbContext.UserGroups
-            .Where(ug => ug.UserId == userId)
-            .Select(ug => ug.Group)
-            .ToListAsync(cancellationToken);
-    public Task<UserGroup?> GetMembershipAsync(
-        Guid groupId,
-        Guid userId,
-        CancellationToken cancellationToken) =>
-        dbContext.UserGroups.FindAsync([userId, groupId], cancellationToken).AsTask();
-
-    public void AddMembership(UserGroup membership) => dbContext.UserGroups.Add(membership);
-
-    public Task SaveChangesAsync(CancellationToken cancellationToken) =>
-        dbContext.SaveChangesAsync(cancellationToken);
 }

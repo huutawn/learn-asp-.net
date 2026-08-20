@@ -59,6 +59,8 @@ public sealed class Principal
 
 public enum ScopeType
 {
+    Group,
+    Team,
     System,
     Organization,
     Project,
