@@ -26,23 +26,6 @@ public sealed class PrincipalConfiguration : IEntityTypeConfiguration<Principal>
     }
 }
 
-public sealed class ScopeConfiguration : IEntityTypeConfiguration<Scope>
-{
-    public void Configure(EntityTypeBuilder<Scope> builder)
-    {
-        builder.ToTable("scopes");
-        builder.HasKey(s => s.Id);
-        builder.Property(s => s.Id)
-            .HasColumnName("id");
-        builder.Property(s => s.Type)
-            .HasColumnName("type")
-            .HasConversion<string>()
-            .IsRequired()
-            .HasMaxLength(100);
-        builder.HasIndex(s => s.Type);
-    }
-}
-
 public sealed class PermissionConfiguration : IEntityTypeConfiguration<Permission>
 {
     public void Configure(EntityTypeBuilder<Permission> builder)
@@ -113,12 +96,10 @@ public sealed class RoleAssignmentConfiguration : IEntityTypeConfiguration<RoleA
         builder.Property(ra => ra.RoleId)
             .HasColumnName("role_id")
             .IsRequired();
-        builder.Property(ra => ra.PrincipalId)
-            .HasColumnName("principal_id")
+        builder.Property(ra => ra.SubjectPrincipalId)
+            .HasColumnName("subject_principal_id")
             .IsRequired();
-        builder.Property(ra => ra.ScopeId)
-            .HasColumnName("scope_id")
-            .IsRequired();
+        builder.Property(ra => ra.ResourcePrincipalId).HasColumnName("resource_principal_id");
         builder.Property(ra => ra.GrantedByPrincipalId)
             .HasColumnName("granted_by_principal_id");
         builder.Property(ra => ra.CreatedAt)
@@ -126,20 +107,37 @@ public sealed class RoleAssignmentConfiguration : IEntityTypeConfiguration<RoleA
             .IsRequired();
 
         builder.HasOne(ra => ra.Role)
-            .WithMany(r => r.Assignments)
+            .WithMany(r => r.SubjectAssignments)
             .HasForeignKey(ra => ra.RoleId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasOne(ra => ra.Principal)
-            .WithMany(p => p.Assignments)
-            .HasForeignKey(ra => ra.PrincipalId)
+        builder.HasOne(ra => ra.SubjectPrincipal)
+            .WithMany(p => p.SubjectAssignments)
+            .HasForeignKey(ra => ra.SubjectPrincipalId)
             .OnDelete(DeleteBehavior.Cascade);
-
-        builder.HasOne(ra => ra.Scope)
-            .WithMany(s => s.Assignments)
-            .HasForeignKey(ra => ra.ScopeId)
+        builder.HasOne(ra => ra.ResourcePrincipal)
+            .WithMany()
+            .HasForeignKey(ra => ra.ResourcePrincipalId)
             .OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(ra => new { ra.SubjectPrincipalId, ra.RoleId, ra.ResourcePrincipalId }).IsUnique();
+    }
+}
 
-        builder.HasIndex(ra => new { ra.PrincipalId, ra.RoleId, ra.ScopeId }).IsUnique();
+public sealed class PermissionGrantConfiguration : IEntityTypeConfiguration<PermissionGrant>
+{
+    public void Configure(EntityTypeBuilder<PermissionGrant> builder)
+    {
+        builder.ToTable("permission_grants");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).HasColumnName("id");
+        builder.Property(x => x.SubjectPrincipalId).HasColumnName("subject_principal_id").IsRequired();
+        builder.Property(x => x.PermissionId).HasColumnName("permission_id").IsRequired();
+        builder.Property(x => x.ResourcePrincipalId).HasColumnName("resource_principal_id");
+        builder.Property(x => x.GrantedByPrincipalId).HasColumnName("granted_by_principal_id");
+        builder.Property(x => x.CreatedAt).HasColumnName("created_at").IsRequired();
+        builder.HasOne(x => x.SubjectPrincipal).WithMany().HasForeignKey(x => x.SubjectPrincipalId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.Permission).WithMany().HasForeignKey(x => x.PermissionId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.ResourcePrincipal).WithMany().HasForeignKey(x => x.ResourcePrincipalId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(x => new { x.SubjectPrincipalId, x.PermissionId, x.ResourcePrincipalId }).IsUnique();
     }
 }

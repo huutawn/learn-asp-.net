@@ -1,6 +1,7 @@
 using IdentityService.Api.Entities;
 using IdentityService.Api.Repositories;
 using IdentityService.Api.Services;
+using IdentityService.Api.DTOs.Members;
 
 var user = new User
 {
@@ -19,14 +20,14 @@ foreach (var type in new[] { PrincipalType.Group, PrincipalType.Team, PrincipalT
     var resourceId = Guid.NewGuid();
     repository.AddResource(type, resourceId, Guid.NewGuid());
 
-    Assert(await service.SetMemberAsync(type, resourceId, user.Id, true, default));
-    Assert((await service.GetMembersAsync(type, resourceId, default))?.Single().Id == user.Id);
+    Assert(await service.SetMemberAsync(type, resourceId, user.Id, user.Id, new SetMemberRequest(), default));
+    Assert((await service.GetMembersAsync(type, resourceId, default))?.Single().UserId == user.Id);
 
-    Assert(await service.SetMemberAsync(type, resourceId, user.Id, false, default));
+    Assert(await service.SetMemberAsync(type, resourceId, user.Id, user.Id, new SetMemberRequest(false), default));
     Assert((await service.GetMembersAsync(type, resourceId, default))?.Count == 0);
 }
 
-Assert(!await service.SetMemberAsync(PrincipalType.Group, Guid.NewGuid(), user.Id, true, default));
+Assert(!await service.SetMemberAsync(PrincipalType.Group, Guid.NewGuid(), user.Id, user.Id, new SetMemberRequest(), default));
 
 static void Assert(bool condition)
 {
@@ -52,11 +53,21 @@ sealed class FakeMembershipRepository(User user) : IMembershipRepository
     public Task<PrincipalMembership?> GetAsync(Guid userId, Guid principalId, CancellationToken cancellationToken) =>
         Task.FromResult(memberships.GetValueOrDefault((userId, principalId)));
 
-    public Task<IReadOnlyList<User>> GetActiveUsersAsync(Guid principalId, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<User>>(memberships.Values
+    public Task<IReadOnlyList<(PrincipalMembership Membership, User User)>> GetActiveUsersAsync(Guid principalId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<(PrincipalMembership Membership, User User)>>(memberships.Values
             .Where(x => x.PrincipalId == principalId && x.LeftAtUtc is null)
-            .Select(_ => user)
+            .Select(x => (x, user))
             .ToArray());
+
+    public Task<bool> IsAdminAsync(Guid userId, CancellationToken cancellationToken) => Task.FromResult(true);
+    public Task<bool> HasPermissionAsync(Guid userId, string permission, Guid resourcePrincipalId, CancellationToken cancellationToken) => Task.FromResult(true);
+    public Task<Guid?> GetUserPrincipalIdAsync(Guid userId, CancellationToken cancellationToken) => Task.FromResult<Guid?>(user.PrincipalId);
+    public Task<HashSet<string>> GetPermissionsAsync(Guid userId, Guid resourcePrincipalId, CancellationToken cancellationToken) => Task.FromResult(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+    public Task<IReadOnlyList<string>> GetPermissionNamesByIdsAsync(IEnumerable<Guid> permissionIds, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<string>>([]);
+    public Task<IReadOnlyList<string>> GetRolePermissionNamesByIdsAsync(IEnumerable<Guid> roleIds, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<string>>([]);
+    public Task<(IReadOnlyList<Guid> RoleIds, IReadOnlyList<Guid> PermissionIds)> GetAccessAsync(Guid subjectPrincipalId, Guid resourcePrincipalId, CancellationToken cancellationToken) => Task.FromResult<(IReadOnlyList<Guid>, IReadOnlyList<Guid>)>(([], []));
+    public Task ReplaceAccessAsync(Guid userId, Guid resourcePrincipalId, IEnumerable<Guid> roleIds, IEnumerable<Guid> permissionIds, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task<bool> HasAnotherOwnerAsync(Guid principalId, Guid excludedUserId, CancellationToken cancellationToken) => Task.FromResult(false);
 
     public void Add(PrincipalMembership membership) =>
         memberships[(membership.UserId, membership.PrincipalId)] = membership;

@@ -32,21 +32,12 @@ public sealed class GroupConfiguration : IEntityTypeConfiguration<Group>
         builder.Property(g => g.PrincipalId)
             .HasColumnName("principal_id");
 
-        builder.Property(g => g.ScopeId)
-            .HasColumnName("scope_id");
-        
         builder.HasOne(g => g.Principal)
             .WithOne(p => p.Group)
             .HasForeignKey<Group>(g => g.PrincipalId)
             .IsRequired()
             .OnDelete(DeleteBehavior.Cascade);
         
-        builder.HasOne(g => g.Scope)
-            .WithMany()
-            .HasForeignKey(g => g.ScopeId)
-            .IsRequired(false)
-            .OnDelete(DeleteBehavior.SetNull);
-
         builder.HasIndex(g => new { g.Name, g.Type }).IsUnique();
     }
 }

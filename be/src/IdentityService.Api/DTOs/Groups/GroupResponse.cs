@@ -5,5 +5,4 @@ public sealed record GroupResponse(
     Guid PrincipalId,
     string Name,
     string? Description,
-    string Type,
-    Guid? ScopeId);
+    string Type);

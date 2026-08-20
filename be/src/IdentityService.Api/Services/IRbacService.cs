@@ -9,11 +9,6 @@ public interface IRbacService
     Task<PrincipalSearchResponse> SearchPrincipalsAsync(PrincipalSearchQuery query, CancellationToken cancellationToken = default);
     Task SetPrincipalAvailabilityAsync(Guid principalId, bool available, CancellationToken cancellationToken = default);
 
-    // Scope
-    Task<ScopeResponse> CreateScopeAsync(CreateScopeReq req, CancellationToken cancellationToken = default);
-    Task<ScopeResponse?> GetScopeByIdAsync(Guid scopeId, CancellationToken cancellationToken = default);
-    Task<IEnumerable<ScopeResponse>> GetAllScopesAsync(CancellationToken cancellationToken = default);
-
     // Permission
     Task<PermissionResponse> CreatePermissionAsync(CreatePermissionReq req, CancellationToken cancellationToken = default);
     Task<PermissionResponse?> GetPermissionByIdAsync(Guid permissionId, CancellationToken cancellationToken = default);
@@ -32,9 +27,8 @@ public interface IRbacService
     Task<IEnumerable<RoleAssignmentResponse>> GetRoleAssignmentsByPrincipalIdAsync(Guid principalId, CancellationToken cancellationToken = default);
     Task<IEnumerable<RoleAssignmentResponse>> GetRoleAssignmentsByRoleIdAsync(Guid roleId, CancellationToken cancellationToken = default);
     Task<bool> DeleteRoleAssignmentAsync(Guid assignmentId, CancellationToken cancellationToken = default);
-    Task<bool> RemovePrincipalFromScopeAsync(Guid principalId, Guid scopeId, CancellationToken cancellationToken = default);
 
     // Authorization evaluation
-    Task<CheckPermissionResponse> CheckPermissionAsync(Guid principalId, string permissionName, Guid? scopeId = null, CancellationToken cancellationToken = default);
-    Task<PrincipalPermissionsResponse> GetPermissionsForPrincipalAsync(Guid principalId, Guid? scopeId = null, CancellationToken cancellationToken = default);
+    Task<CheckPermissionResponse> CheckPermissionAsync(Guid principalId, string permissionName, Guid? resourcePrincipalId = null, CancellationToken cancellationToken = default);
+    Task<PrincipalPermissionsResponse> GetPermissionsForPrincipalAsync(Guid principalId, Guid? resourcePrincipalId = null, CancellationToken cancellationToken = default);
 }

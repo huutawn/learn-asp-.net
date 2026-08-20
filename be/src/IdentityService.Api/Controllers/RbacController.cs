@@ -39,31 +39,6 @@ public sealed class RbacController(IRbacService rbacService) : ControllerBase
         return NoContent();
     }
 
-    // Scopes
-    [Authorize(Roles = nameof(UserRole.Admin))]
-    [HttpPost("scopes")]
-    public async Task<ActionResult<ScopeResponse>> CreateScope(
-        [FromBody] CreateScopeReq request,
-        CancellationToken cancellationToken)
-    {
-        var result = await rbacService.CreateScopeAsync(request, cancellationToken);
-        return Created($"api/rbac/scopes/{result.Id}", result);
-    }
-
-    [HttpGet("scopes")]
-    public async Task<ActionResult<IEnumerable<ScopeResponse>>> GetAllScopes(CancellationToken cancellationToken)
-    {
-        var result = await rbacService.GetAllScopesAsync(cancellationToken);
-        return Ok(result);
-    }
-
-    [HttpGet("scopes/{id:guid}")]
-    public async Task<ActionResult<ScopeResponse>> GetScopeById(Guid id, CancellationToken cancellationToken)
-    {
-        var result = await rbacService.GetScopeByIdAsync(id, cancellationToken);
-        return result is null ? NotFound() : Ok(result);
-    }
-
     // Permissions
     [Authorize(Roles = nameof(UserRole.Admin))]
     [HttpPost("permissions")]
@@ -178,28 +153,14 @@ public sealed class RbacController(IRbacService rbacService) : ControllerBase
         return deleted ? NoContent() : NotFound();
     }
 
-    [Authorize(Roles = nameof(UserRole.Admin))]
-    [HttpDelete("scopes/{scopeId:guid}/principals/{principalId:guid}")]
-    public async Task<IActionResult> RemovePrincipalFromScope(
-        Guid scopeId,
-        Guid principalId,
-        CancellationToken cancellationToken)
-    {
-        var removed = await rbacService.RemovePrincipalFromScopeAsync(
-            principalId,
-            scopeId,
-            cancellationToken);
-        return removed ? NoContent() : NotFound();
-    }
-
     // Permission Checking / Introspection
     [HttpGet("principals/{principalId:guid}/permissions")]
     public async Task<ActionResult<PrincipalPermissionsResponse>> GetPermissionsForPrincipal(
         Guid principalId,
-        [FromQuery] Guid? scopeId,
+        [FromQuery] Guid? resourcePrincipalId,
         CancellationToken cancellationToken)
     {
-        var result = await rbacService.GetPermissionsForPrincipalAsync(principalId, scopeId, cancellationToken);
+        var result = await rbacService.GetPermissionsForPrincipalAsync(principalId, resourcePrincipalId, cancellationToken);
         return Ok(result);
     }
 
@@ -207,10 +168,10 @@ public sealed class RbacController(IRbacService rbacService) : ControllerBase
     public async Task<ActionResult<CheckPermissionResponse>> CheckPermission(
         Guid principalId,
         [FromQuery] string permission,
-        [FromQuery] Guid? scopeId,
+        [FromQuery] Guid? resourcePrincipalId,
         CancellationToken cancellationToken)
     {
-        var result = await rbacService.CheckPermissionAsync(principalId, permission, scopeId, cancellationToken);
+        var result = await rbacService.CheckPermissionAsync(principalId, permission, resourcePrincipalId, cancellationToken);
         return Ok(result);
     }
 }

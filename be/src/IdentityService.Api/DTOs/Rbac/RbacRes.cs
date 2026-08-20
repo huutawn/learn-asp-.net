@@ -11,18 +11,13 @@ public sealed record PermissionResponse(
     string Name,
     string? Description);
 
-public sealed record ScopeResponse(
-    Guid Id,
-    string Type);
-
 public sealed record PrincipalResponse(
     Guid PrincipalId,
     string Type,
     string Name,
     string? Description,
     string? Email,
-    bool Available,
-    Guid? ScopeId);
+    bool Available);
 
 public sealed record PrincipalSearchResponse(
     IReadOnlyList<PrincipalResponse> Items,
@@ -31,10 +26,9 @@ public sealed record PrincipalSearchResponse(
 public sealed record RoleAssignmentResponse(
     Guid Id,
     Guid RoleId,
-    Guid PrincipalId,
-    Guid ScopeId,
+    Guid SubjectPrincipalId,
+    Guid? ResourcePrincipalId,
     string? RoleName = null,
-    string? ScopeType = null,
     DateTimeOffset? CreatedAt = null
 );
 
@@ -42,7 +36,7 @@ public sealed record CheckPermissionResponse(
     bool HasPermission,
     string PermissionName,
     Guid PrincipalId,
-    Guid? ScopeId
+    Guid? ResourcePrincipalId
 );
 
 public sealed record PrincipalPermissionsResponse(

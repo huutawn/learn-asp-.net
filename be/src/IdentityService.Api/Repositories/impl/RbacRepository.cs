@@ -6,356 +6,75 @@ using Microsoft.EntityFrameworkCore;
 
 public sealed class RbacRepository(ApplicationDbContext dbContext) : IRbacRepository
 {
-    // Principal
-    public Task<Principal?> GetPrincipalByIdAsync(
-        Guid principalId,
-        CancellationToken cancellationToken = default) =>
-        dbContext.Principals.FindAsync(new object?[] { principalId }, cancellationToken).AsTask();
-
-    public Task<Principal?> GetPrincipalDetailsByIdAsync(
-        Guid principalId,
-        CancellationToken cancellationToken = default) =>
-        PrincipalDetailsQuery()
-            .FirstOrDefaultAsync(p => p.Id == principalId, cancellationToken);
-
-    public async Task<IReadOnlyList<Principal>> SearchPrincipalsAsync(
-        PrincipalType? type,
-        string? search,
-        Guid? cursor,
-        int limit,
-        bool? available,
-        Guid? scopeId,
-        CancellationToken cancellationToken = default)
+    public Task<Principal?> GetPrincipalByIdAsync(Guid id, CancellationToken ct = default) => dbContext.Principals.FindAsync([id], ct).AsTask();
+    public Task<Principal?> GetPrincipalDetailsByIdAsync(Guid id, CancellationToken ct = default) => PrincipalDetailsQuery().FirstOrDefaultAsync(x => x.Id == id, ct);
+    public async Task<IReadOnlyList<Principal>> SearchPrincipalsAsync(PrincipalType? type, string? search, Guid? cursor, int limit, bool? available, CancellationToken ct = default)
     {
         var query = PrincipalDetailsQuery();
-
-        if (type.HasValue)
-        {
-            query = query.Where(p => p.Type == type.Value);
-        }
-
-        if (available.HasValue)
-        {
-            query = query.Where(p => p.Available == available.Value);
-        }
-
-        if (scopeId.HasValue)
-        {
-            query = query.Where(p => p.Assignments.Any(a => a.ScopeId == scopeId.Value));
-        }
-
+        if (type.HasValue) query = query.Where(x => x.Type == type.Value);
+        if (available.HasValue) query = query.Where(x => x.Available == available.Value);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var pattern = search.Trim().ToLower();
-            query = query.Where(p =>
-                (p.User != null && (p.User.DisplayName.ToLower().Contains(pattern) || p.User.Email.ToLower().Contains(pattern))) ||
-                (p.Group != null && p.Group.Name.ToLower().Contains(pattern)) ||
-                (p.Team != null && p.Team.Name.ToLower().Contains(pattern)) ||
-                (p.Project != null && p.Project.Name.ToLower().Contains(pattern)));
+            query = query.Where(p => (p.User != null && (p.User.DisplayName.ToLower().Contains(pattern) || p.User.Email.ToLower().Contains(pattern))) || (p.Group != null && p.Group.Name.ToLower().Contains(pattern)) || (p.Team != null && p.Team.Name.ToLower().Contains(pattern)) || (p.Project != null && p.Project.Name.ToLower().Contains(pattern)));
         }
-
-        if (cursor.HasValue)
-        {
-            query = query.Where(p => p.Id.CompareTo(cursor.Value) > 0);
-        }
-
-        return await query
-            .AsNoTracking()
-            .OrderBy(p => p.Id)
-            .Take(limit + 1)
-            .ToListAsync(cancellationToken);
+        if (cursor.HasValue) query = query.Where(x => x.Id.CompareTo(cursor.Value) > 0);
+        return await query.AsNoTracking().OrderBy(x => x.Id).Take(limit + 1).ToListAsync(ct);
     }
-    private IQueryable<Principal> PrincipalDetailsQuery() =>
-        dbContext.Principals
-            .Include(p => p.User)
-            .Include(p => p.Group)
-            .Include(p => p.Team)
-            .Include(p => p.Project);
+    private IQueryable<Principal> PrincipalDetailsQuery() => dbContext.Principals.Include(x => x.User).Include(x => x.Group).Include(x => x.Team).Include(x => x.Project);
 
-    // Scope
-    public async Task<Scope> CreateScopeAsync(Scope scope, CancellationToken cancellationToken = default)
+    public async Task<Role> CreateRoleAsync(Role role, CancellationToken ct = default) { dbContext.Roles.Add(role); await dbContext.SaveChangesAsync(ct); return role; }
+    public Task<Role?> GetRoleByIdAsync(Guid id, CancellationToken ct = default) => dbContext.Roles.FindAsync([id], ct).AsTask();
+    public Task<Role?> GetRoleByIdWithPermissionsAsync(Guid id, CancellationToken ct = default) => dbContext.Roles.Include(x => x.RolePermissions).ThenInclude(x => x.Permission).FirstOrDefaultAsync(x => x.Id == id, ct);
+    public Task<Role?> GetRoleByNameAsync(string name, CancellationToken ct = default) => dbContext.Roles.FirstOrDefaultAsync(x => x.Name.ToLower() == name.ToLower(), ct);
+    public Task<bool> RoleExistsByNameAsync(string name, CancellationToken ct = default) => dbContext.Roles.AnyAsync(x => x.Name.ToLower() == name.ToLower(), ct);
+    public async Task<IEnumerable<Role>> GetAllRolesAsync(CancellationToken ct = default) => await dbContext.Roles.Include(x => x.RolePermissions).ThenInclude(x => x.Permission).AsNoTracking().ToListAsync(ct);
+    public async Task DeleteRoleAsync(Role role, CancellationToken ct = default) { dbContext.Roles.Remove(role); await dbContext.SaveChangesAsync(ct); }
+
+    public async Task<Permission> CreatePermissionAsync(Permission permission, CancellationToken ct = default) { dbContext.Permissions.Add(permission); await dbContext.SaveChangesAsync(ct); return permission; }
+    public Task<Permission?> GetPermissionByIdAsync(Guid id, CancellationToken ct = default) => dbContext.Permissions.FindAsync([id], ct).AsTask();
+    public Task<Permission?> GetPermissionByNameAsync(string name, CancellationToken ct = default) => dbContext.Permissions.FirstOrDefaultAsync(x => x.Name.ToLower() == name.ToLower(), ct);
+    public Task<bool> PermissionExistsByNameAsync(string name, CancellationToken ct = default) => dbContext.Permissions.AnyAsync(x => x.Name.ToLower() == name.ToLower(), ct);
+    public async Task<IEnumerable<Permission>> GetAllPermissionsAsync(CancellationToken ct = default) => await dbContext.Permissions.AsNoTracking().ToListAsync(ct);
+    public async Task<IEnumerable<Permission>> GetPermissionsByIdsAsync(IEnumerable<Guid> ids, CancellationToken ct = default) => await dbContext.Permissions.Where(x => ids.Contains(x.Id)).ToListAsync(ct);
+    public async Task DeletePermissionAsync(Permission permission, CancellationToken ct = default) { dbContext.Permissions.Remove(permission); await dbContext.SaveChangesAsync(ct); }
+
+    public async Task<RolePermission> CreateRolePermissionAsync(RolePermission item, CancellationToken ct = default) { dbContext.RolePermissions.Add(item); await dbContext.SaveChangesAsync(ct); return item; }
+    public Task<RolePermission?> GetRolePermissionAsync(Guid roleId, Guid permissionId, CancellationToken ct = default) => dbContext.RolePermissions.FindAsync([roleId, permissionId], ct).AsTask();
+    public async Task<IEnumerable<Permission>> GetPermissionsByRoleIdAsync(Guid roleId, CancellationToken ct = default) => await dbContext.RolePermissions.Where(x => x.RoleId == roleId).Select(x => x.Permission).ToListAsync(ct);
+    public async Task<IEnumerable<RolePermission>> GetRolePermissionsByRoleIdAsync(Guid roleId, CancellationToken ct = default) => await dbContext.RolePermissions.Include(x => x.Permission).Where(x => x.RoleId == roleId).ToListAsync(ct);
+    public async Task SetRolePermissionsAsync(Guid roleId, IEnumerable<Guid> ids, CancellationToken ct = default) { dbContext.RolePermissions.RemoveRange(await dbContext.RolePermissions.Where(x => x.RoleId == roleId).ToListAsync(ct)); await dbContext.RolePermissions.AddRangeAsync(ids.Distinct().Select(id => new RolePermission { RoleId = roleId, PermissionId = id }), ct); await dbContext.SaveChangesAsync(ct); }
+    public async Task DeleteRolePermissionAsync(RolePermission item, CancellationToken ct = default) { dbContext.RolePermissions.Remove(item); await dbContext.SaveChangesAsync(ct); }
+
+    public async Task<RoleAssignment> CreateRoleAssignmentAsync(RoleAssignment item, CancellationToken ct = default) { dbContext.RoleAssignments.Add(item); await dbContext.SaveChangesAsync(ct); return item; }
+    public Task<RoleAssignment?> GetRoleAssignmentByIdAsync(Guid id, CancellationToken ct = default) => dbContext.RoleAssignments.Include(x => x.Role).FirstOrDefaultAsync(x => x.Id == id, ct);
+    public Task<RoleAssignment?> GetRoleAssignmentAsync(Guid subjectId, Guid roleId, Guid? resourceId, CancellationToken ct = default) => dbContext.RoleAssignments.Include(x => x.Role).FirstOrDefaultAsync(x => x.SubjectPrincipalId == subjectId && x.RoleId == roleId && x.ResourcePrincipalId == resourceId, ct);
+    public async Task<IEnumerable<Role>> GetRolesByPrincipalIdAsync(Guid id, CancellationToken ct = default) => await dbContext.RoleAssignments.Where(x => x.SubjectPrincipalId == id).Select(x => x.Role).Distinct().ToListAsync(ct);
+    public async Task<IEnumerable<RoleAssignment>> GetRoleAssignmentsByPrincipalIdAsync(Guid id, CancellationToken ct = default) => await dbContext.RoleAssignments.Include(x => x.Role).Where(x => x.SubjectPrincipalId == id).AsNoTracking().ToListAsync(ct);
+    public async Task<IEnumerable<RoleAssignment>> GetRoleAssignmentsByRoleIdAsync(Guid id, CancellationToken ct = default) => await dbContext.RoleAssignments.Include(x => x.Role).Where(x => x.RoleId == id).AsNoTracking().ToListAsync(ct);
+    public async Task DeleteRoleAssignmentAsync(RoleAssignment item, CancellationToken ct = default) { dbContext.RoleAssignments.Remove(item); await dbContext.SaveChangesAsync(ct); }
+    public async Task<bool> DeleteRoleAssignmentsAsync(Guid subjectId, Guid? resourceId, CancellationToken ct = default) { var items = await dbContext.RoleAssignments.Where(x => x.SubjectPrincipalId == subjectId && x.ResourcePrincipalId == resourceId).ToListAsync(ct); if (items.Count == 0) return false; dbContext.RoleAssignments.RemoveRange(items); await dbContext.SaveChangesAsync(ct); return true; }
+
+    public async Task<IEnumerable<string>> GetPermissionsForPrincipalAsync(Guid principalId, Guid? resourceId = null, CancellationToken ct = default)
     {
-        dbContext.Scopes.Add(scope);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return scope;
-    }
-
-    public Task<Scope?> GetScopeByIdAsync(Guid scopeId, CancellationToken cancellationToken = default) =>
-        dbContext.Scopes.FindAsync(new object?[] { scopeId }, cancellationToken).AsTask();
-
-    public Task<Scope?> GetScopeByTypeAsync(ScopeType type, CancellationToken cancellationToken = default) =>
-        dbContext.Scopes.FirstOrDefaultAsync(s => s.Type == type, cancellationToken);
-
-    public async Task<IEnumerable<Scope>> GetAllScopesAsync(CancellationToken cancellationToken = default) =>
-        await dbContext.Scopes
-            .AsNoTracking()
-            .ToListAsync(cancellationToken);
-
-    public async Task<Scope> GetOrCreateDefaultScopeAsync(CancellationToken cancellationToken = default)
-    {
-        var scope = await dbContext.Scopes.FirstOrDefaultAsync(s => s.Type == ScopeType.System, cancellationToken);
-        if (scope is null)
+        var principal = await dbContext.Principals.Include(x => x.User).FirstOrDefaultAsync(x => x.Id == principalId && x.Available, ct);
+        if (principal is null) return [];
+        var subjectId = principal.User?.PrincipalId ?? principalId;
+        if (principal.User?.Role == UserRole.Admin) return await dbContext.Permissions.Select(x => x.Name).ToListAsync(ct);
+        if (resourceId.HasValue)
         {
-            scope = new Scope
+            var membership = await dbContext.PrincipalMemberships.FirstOrDefaultAsync(x => x.UserId == principal.User!.Id && x.PrincipalId == resourceId.Value && x.LeftAtUtc == null, ct);
+            if (membership?.IsOwner == true) return await dbContext.Permissions.Select(x => x.Name).ToListAsync(ct);
+            if (membership is null)
             {
-                Id = Guid.NewGuid(),
-                Type = ScopeType.System
-            };
-            dbContext.Scopes.Add(scope);
-            await dbContext.SaveChangesAsync(cancellationToken);
+                resourceId = null;
+            }
         }
-        return scope;
+        var roleIds = dbContext.RoleAssignments.Where(x => x.SubjectPrincipalId == subjectId && (x.ResourcePrincipalId == null || x.ResourcePrincipalId == resourceId)).Select(x => x.RoleId);
+        var roles = dbContext.RolePermissions.Where(x => roleIds.Contains(x.RoleId)).Select(x => x.Permission.Name);
+        var direct = dbContext.PermissionGrants.Where(x => x.SubjectPrincipalId == subjectId && (x.ResourcePrincipalId == null || x.ResourcePrincipalId == resourceId)).Select(x => x.Permission.Name);
+        return await roles.Concat(direct).Distinct().ToListAsync(ct);
     }
-
-    // Role
-    public async Task<Role> CreateRoleAsync(Role role, CancellationToken cancellationToken = default)
-    {
-        dbContext.Roles.Add(role);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return role;
-    }
-
-    public Task<Role?> GetRoleByIdAsync(Guid roleId, CancellationToken cancellationToken = default) =>
-        dbContext.Roles.FindAsync(new object?[] { roleId }, cancellationToken).AsTask();
-
-    public Task<Role?> GetRoleByIdWithPermissionsAsync(Guid roleId, CancellationToken cancellationToken = default) =>
-        dbContext.Roles
-            .Include(r => r.RolePermissions)
-            .ThenInclude(rp => rp.Permission)
-            .FirstOrDefaultAsync(r => r.Id == roleId, cancellationToken);
-
-    public Task<Role?> GetRoleByNameAsync(string name, CancellationToken cancellationToken = default) =>
-        dbContext.Roles.FirstOrDefaultAsync(r => r.Name.ToLower() == name.ToLower(), cancellationToken);
-
-    public Task<bool> RoleExistsByNameAsync(string name, CancellationToken cancellationToken = default) =>
-        dbContext.Roles.AnyAsync(r => r.Name.ToLower() == name.ToLower(), cancellationToken);
-
-    public async Task<IEnumerable<Role>> GetAllRolesAsync(CancellationToken cancellationToken = default) =>
-        await dbContext.Roles
-            .Include(r => r.RolePermissions)
-            .ThenInclude(rp => rp.Permission)
-            .AsNoTracking()
-            .ToListAsync(cancellationToken);
-
-    public async Task DeleteRoleAsync(Role role, CancellationToken cancellationToken = default)
-    {
-        dbContext.Roles.Remove(role);
-        await dbContext.SaveChangesAsync(cancellationToken);
-    }
-
-    // Permission
-    public async Task<Permission> CreatePermissionAsync(Permission permission, CancellationToken cancellationToken = default)
-    {
-        dbContext.Permissions.Add(permission);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return permission;
-    }
-
-    public Task<Permission?> GetPermissionByIdAsync(Guid permissionId, CancellationToken cancellationToken = default) =>
-        dbContext.Permissions.FindAsync(new object?[] { permissionId }, cancellationToken).AsTask();
-
-    public Task<Permission?> GetPermissionByNameAsync(string name, CancellationToken cancellationToken = default) =>
-        dbContext.Permissions.FirstOrDefaultAsync(p => p.Name.ToLower() == name.ToLower(), cancellationToken);
-
-    public Task<bool> PermissionExistsByNameAsync(string name, CancellationToken cancellationToken = default) =>
-        dbContext.Permissions.AnyAsync(p => p.Name.ToLower() == name.ToLower(), cancellationToken);
-
-    public async Task<IEnumerable<Permission>> GetAllPermissionsAsync(CancellationToken cancellationToken = default) =>
-        await dbContext.Permissions
-            .AsNoTracking()
-            .ToListAsync(cancellationToken);
-
-    public async Task<IEnumerable<Permission>> GetPermissionsByIdsAsync(
-        IEnumerable<Guid> permissionIds,
-        CancellationToken cancellationToken = default) =>
-        await dbContext.Permissions
-            .Where(p => permissionIds.Contains(p.Id))
-            .ToListAsync(cancellationToken);
-
-    public async Task DeletePermissionAsync(Permission permission, CancellationToken cancellationToken = default)
-    {
-        dbContext.Permissions.Remove(permission);
-        await dbContext.SaveChangesAsync(cancellationToken);
-    }
-
-    // RolePermission
-    public async Task<RolePermission> CreateRolePermissionAsync(RolePermission rolePermission, CancellationToken cancellationToken = default)
-    {
-        dbContext.RolePermissions.Add(rolePermission);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return rolePermission;
-    }
-
-    public Task<RolePermission?> GetRolePermissionAsync(Guid roleId, Guid permissionId, CancellationToken cancellationToken = default) =>
-        dbContext.RolePermissions.FindAsync(new object?[] { roleId, permissionId }, cancellationToken).AsTask();
-
-    public async Task<IEnumerable<Permission>> GetPermissionsByRoleIdAsync(Guid roleId, CancellationToken cancellationToken = default) =>
-        await dbContext.RolePermissions
-            .Where(rp => rp.RoleId == roleId)
-            .Select(rp => rp.Permission)
-            .ToListAsync(cancellationToken);
-
-    public async Task<IEnumerable<RolePermission>> GetRolePermissionsByRoleIdAsync(Guid roleId, CancellationToken cancellationToken = default) =>
-        await dbContext.RolePermissions
-            .Include(rp => rp.Permission)
-            .Where(rp => rp.RoleId == roleId)
-            .ToListAsync(cancellationToken);
-
-    public async Task SetRolePermissionsAsync(
-        Guid roleId,
-        IEnumerable<Guid> permissionIds,
-        CancellationToken cancellationToken = default)
-    {
-        var existing = await dbContext.RolePermissions
-            .Where(rp => rp.RoleId == roleId)
-            .ToListAsync(cancellationToken);
-
-        dbContext.RolePermissions.RemoveRange(existing);
-
-        var toAdd = permissionIds.Distinct().Select(pid => new RolePermission
-        {
-            RoleId = roleId,
-            PermissionId = pid
-        });
-
-        await dbContext.RolePermissions.AddRangeAsync(toAdd, cancellationToken);
-        await dbContext.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task DeleteRolePermissionAsync(RolePermission rolePermission, CancellationToken cancellationToken = default)
-    {
-        dbContext.RolePermissions.Remove(rolePermission);
-        await dbContext.SaveChangesAsync(cancellationToken);
-    }
-
-    // RoleAssignment
-    public async Task<RoleAssignment> CreateRoleAssignmentAsync(RoleAssignment roleAssignment, CancellationToken cancellationToken = default)
-    {
-        dbContext.RoleAssignments.Add(roleAssignment);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return roleAssignment;
-    }
-
-    public Task<RoleAssignment?> GetRoleAssignmentByIdAsync(Guid assignmentId, CancellationToken cancellationToken = default) =>
-        dbContext.RoleAssignments
-            .Include(ra => ra.Role)
-            .Include(ra => ra.Scope)
-            .FirstOrDefaultAsync(ra => ra.Id == assignmentId, cancellationToken);
-
-    public Task<RoleAssignment?> GetRoleAssignmentAsync(Guid principalId, Guid roleId, CancellationToken cancellationToken = default) =>
-        dbContext.RoleAssignments
-            .Include(ra => ra.Role)
-            .Include(ra => ra.Scope)
-            .FirstOrDefaultAsync(ra => ra.PrincipalId == principalId && ra.RoleId == roleId, cancellationToken);
-
-    public Task<RoleAssignment?> GetRoleAssignmentAsync(Guid principalId, Guid roleId, Guid scopeId, CancellationToken cancellationToken = default) =>
-        dbContext.RoleAssignments
-            .Include(ra => ra.Role)
-            .Include(ra => ra.Scope)
-            .FirstOrDefaultAsync(ra => ra.PrincipalId == principalId && ra.RoleId == roleId && ra.ScopeId == scopeId, cancellationToken);
-
-    public async Task<IEnumerable<Role>> GetRolesByPrincipalIdAsync(Guid principalId, CancellationToken cancellationToken = default) =>
-        await dbContext.RoleAssignments
-            .Where(ra => ra.PrincipalId == principalId)
-            .Select(ra => ra.Role)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-
-    public async Task<IEnumerable<RoleAssignment>> GetRoleAssignmentsByPrincipalIdAsync(Guid principalId, CancellationToken cancellationToken = default) =>
-        await dbContext.RoleAssignments
-            .Include(ra => ra.Role)
-            .Include(ra => ra.Scope)
-            .Where(ra => ra.PrincipalId == principalId)
-            .AsNoTracking()
-            .ToListAsync(cancellationToken);
-
-    public async Task<IEnumerable<RoleAssignment>> GetRoleAssignmentsByRoleIdAsync(Guid roleId, CancellationToken cancellationToken = default) =>
-        await dbContext.RoleAssignments
-            .Include(ra => ra.Role)
-            .Include(ra => ra.Scope)
-            .Where(ra => ra.RoleId == roleId)
-            .AsNoTracking()
-            .ToListAsync(cancellationToken);
-
-    public async Task DeleteRoleAssignmentAsync(RoleAssignment roleAssignment, CancellationToken cancellationToken = default)
-    {
-        dbContext.RoleAssignments.Remove(roleAssignment);
-        await dbContext.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task<bool> DeleteRoleAssignmentsAsync(
-        Guid principalId,
-        Guid scopeId,
-        CancellationToken cancellationToken = default)
-    {
-        var assignments = await dbContext.RoleAssignments
-            .Where(x => x.PrincipalId == principalId && x.ScopeId == scopeId)
-            .ToListAsync(cancellationToken);
-        if (assignments.Count == 0) return false;
-        dbContext.RoleAssignments.RemoveRange(assignments);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return true;
-    }
-
-    // Evaluation
-    public async Task<IEnumerable<string>> GetPermissionsForPrincipalAsync(
-        Guid principalId,
-        Guid? scopeId = null,
-        CancellationToken cancellationToken = default)
-    {
-        var principalIds = new List<Guid> { principalId };
-
-        var principal = await dbContext.Principals
-            .Include(p => p.User)
-            .FirstOrDefaultAsync(p => p.Id == principalId, cancellationToken);
-
-        if (principal is null || !principal.Available)
-        {
-            return [];
-        }
-
-        if (principal.User is not null)
-        {
-            var memberPrincipalIds = await dbContext.PrincipalMemberships
-                .Where(x => x.UserId == principal.User.Id && x.LeftAtUtc == null)
-                .Select(x => x.PrincipalId)
-                .ToListAsync(cancellationToken);
-
-            principalIds.AddRange(memberPrincipalIds);
-        }
-
-        var availablePrincipalIds = await dbContext.Principals
-            .Where(p => principalIds.Contains(p.Id) && p.Available)
-            .Select(p => p.Id)
-            .ToListAsync(cancellationToken);
-
-        var query = dbContext.RoleAssignments
-            .Where(ra => availablePrincipalIds.Contains(ra.PrincipalId));
-
-        if (scopeId.HasValue)
-        {
-            query = query.Where(ra => ra.ScopeId == scopeId.Value);
-        }
-
-        var roleIds = await query.Select(ra => ra.RoleId).Distinct().ToListAsync(cancellationToken);
-
-        return await dbContext.RolePermissions
-            .Where(rp => roleIds.Contains(rp.RoleId))
-            .Select(rp => rp.Permission.Name)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-    }
-
-    public async Task<bool> HasPermissionAsync(
-        Guid principalId,
-        string permissionName,
-        Guid? scopeId = null,
-        CancellationToken cancellationToken = default)
-    {
-        var permissions = await GetPermissionsForPrincipalAsync(principalId, scopeId, cancellationToken);
-        return permissions.Any(p => p.Equals(permissionName, StringComparison.OrdinalIgnoreCase));
-    }
-
-    public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
-        dbContext.SaveChangesAsync(cancellationToken);
+    public async Task<bool> HasPermissionAsync(Guid principalId, string permissionName, Guid? resourceId = null, CancellationToken ct = default) => (await GetPermissionsForPrincipalAsync(principalId, resourceId, ct)).Any(x => x.Equals(permissionName, StringComparison.OrdinalIgnoreCase));
+    public Task SaveChangesAsync(CancellationToken ct = default) => dbContext.SaveChangesAsync(ct);
 }

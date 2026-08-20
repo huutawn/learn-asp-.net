@@ -26,6 +26,7 @@ public sealed class PrincipalMembershipConfiguration : IEntityTypeConfiguration<
         builder.HasKey(x => new { x.UserId, x.PrincipalId });
         builder.Property(x => x.UserId).HasColumnName("user_id");
         builder.Property(x => x.PrincipalId).HasColumnName("principal_id");
+        builder.Property(x => x.IsOwner).HasColumnName("is_owner").HasDefaultValue(false).IsRequired();
         builder.Property(x => x.JoinedAtUtc).HasColumnName("joined_at_utc").IsRequired();
         builder.Property(x => x.LeftAtUtc).HasColumnName("left_at_utc");
         builder.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);

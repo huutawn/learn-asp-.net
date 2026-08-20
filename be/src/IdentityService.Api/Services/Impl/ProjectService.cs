@@ -5,13 +5,13 @@ using IdentityService.Api.Repositories;
 
 namespace IdentityService.Api.Services;
 
-public sealed class ProjectService(IProjectRepository projectRepository, IRbacRepository rbacRepository, TimeProvider timeProvider) : IProjectService
+public sealed class ProjectService(IProjectRepository projectRepository, TimeProvider timeProvider, IMembershipRepository membershipRepository) : IProjectService
 {
     public async Task<ProjectResponse> CreateAsync(CreateProjectRequest request, Guid ownerId, CancellationToken cancellationToken)
     {
-        await ValidateReferencesAsync(ownerId, request.ScopeId, cancellationToken);
-        var scope = await rbacRepository.GetScopeByTypeAsync(ScopeType.Project, cancellationToken)
-            ?? throw new NotFoundException("Project scope not found.");
+        if (!await membershipRepository.IsAdminAsync(ownerId, cancellationToken) && !await membershipRepository.HasPermissionAsync(ownerId, "project.create", Guid.Empty, cancellationToken))
+            throw new ForbiddenException("Missing project.create permission.");
+        await ValidateReferencesAsync(ownerId, cancellationToken);
         var now = timeProvider.GetUtcNow();
         var principalId = Guid.NewGuid();
         var project = new Project
@@ -23,11 +23,12 @@ public sealed class ProjectService(IProjectRepository projectRepository, IRbacRe
             Type = Required(request.Type, "Project type"),
             Description = Optional(request.Description),
             OwnerId = ownerId,
-            ScopeId = scope.Id,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         };
         await projectRepository.AddAsync(project, cancellationToken);
+        membershipRepository.Add(new PrincipalMembership { UserId = ownerId, PrincipalId = principalId, IsOwner = true, JoinedAtUtc = now });
+        await membershipRepository.SaveChangesAsync(cancellationToken);
         return Map(project);
     }
 
@@ -38,15 +39,12 @@ public sealed class ProjectService(IProjectRepository projectRepository, IRbacRe
     {
         var project = await projectRepository.GetForUpdateAsync(id, cancellationToken);
         if (project is null) return null;
-        var scope = await rbacRepository.GetScopeByTypeAsync(ScopeType.Project, cancellationToken)
-            ?? throw new NotFoundException("Project scope not found.");
-        await ValidateReferencesAsync(request.OwnerId, scope.Id, cancellationToken);
+        await ValidateReferencesAsync(request.OwnerId, cancellationToken);
 
         project.Name = Required(request.Name, "Project name");
         project.Type = Required(request.Type, "Project type");
         project.Description = Optional(request.Description);
         project.OwnerId = request.OwnerId;
-        project.ScopeId = scope.Id;
         project.UpdatedAtUtc = timeProvider.GetUtcNow();
         await projectRepository.SaveChangesAsync(cancellationToken);
         return Map(project);
@@ -60,17 +58,15 @@ public sealed class ProjectService(IProjectRepository projectRepository, IRbacRe
         return true;
     }
 
-    private async Task ValidateReferencesAsync(Guid ownerId, Guid? scopeId, CancellationToken cancellationToken)
+    private async Task ValidateReferencesAsync(Guid ownerId, CancellationToken cancellationToken)
     {
         if (!await projectRepository.OwnerExistsAsync(ownerId, cancellationToken))
             throw new NotFoundException("Project owner not found.");
-        if (scopeId.HasValue && !await projectRepository.ScopeExistsAsync(scopeId.Value, cancellationToken))
-            throw new NotFoundException("Scope not found.");
     }
 
     private static ProjectResponse Map(Project project) => new(
         project.Id, project.PrincipalId, project.Name, project.Type, project.Description,
-        project.OwnerId, project.ScopeId, project.CreatedAtUtc, project.UpdatedAtUtc);
+        project.OwnerId, project.CreatedAtUtc, project.UpdatedAtUtc);
 
     private static string Required(string value, string field) => string.IsNullOrWhiteSpace(value)
         ? throw new BadRequestException($"{field} is required.") : value.Trim();

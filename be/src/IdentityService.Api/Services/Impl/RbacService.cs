@@ -43,7 +43,7 @@ public sealed class RbacService(
         }
 
         var principals = await rbacRepository.SearchPrincipalsAsync(
-            type, query.Search, cursor, query.Limit, query.Available, query.ScopeId, cancellationToken);
+            type, query.Search, cursor, query.Limit, query.Available, cancellationToken);
         var hasNextPage = principals.Count > query.Limit;
         var items = principals.Take(query.Limit).Select(MapPrincipal).ToArray();
         return new PrincipalSearchResponse(
@@ -66,48 +66,18 @@ public sealed class RbacService(
     {
         PrincipalType.User when principal.User is not null => new(
             principal.Id, principal.Type.ToString(), principal.User.DisplayName, null,
-            principal.User.Email, principal.Available, null),
+            principal.User.Email, principal.Available),
         PrincipalType.Group when principal.Group is not null => new(
             principal.Id, principal.Type.ToString(), principal.Group.Name,
-            principal.Group.Description, null, principal.Available, principal.Group.ScopeId),
+            principal.Group.Description, null, principal.Available),
         PrincipalType.Team when principal.Team is not null => new(
             principal.Id, principal.Type.ToString(), principal.Team.Name,
-            principal.Team.Description, null, principal.Available, principal.Team.ScopeId),
+            principal.Team.Description, null, principal.Available),
         PrincipalType.Project when principal.Project is not null => new(
             principal.Id, principal.Type.ToString(), principal.Project.Name,
-            principal.Project.Description, null, principal.Available, principal.Project.ScopeId),
-        _ => new(principal.Id, principal.Type.ToString(), string.Empty, null, null, principal.Available, null)
+            principal.Project.Description, null, principal.Available),
+        _ => new(principal.Id, principal.Type.ToString(), string.Empty, null, null, principal.Available)
     };
-
-    // Scope
-    public async Task<ScopeResponse> CreateScopeAsync(CreateScopeReq req, CancellationToken cancellationToken = default)
-    {
-        if (!Enum.TryParse<ScopeType>(req.Type, true, out var scopeType))
-        {
-            throw new BadRequestException($"Invalid scope type: '{req.Type}'. Allowed values: {string.Join(", ", Enum.GetNames<ScopeType>())}");
-        }
-
-        var scope = new Scope
-        {
-            Id = Guid.NewGuid(),
-            Type = scopeType
-        };
-
-        await rbacRepository.CreateScopeAsync(scope, cancellationToken);
-        return new ScopeResponse(scope.Id, scope.Type.ToString());
-    }
-
-    public async Task<ScopeResponse?> GetScopeByIdAsync(Guid scopeId, CancellationToken cancellationToken = default)
-    {
-        var scope = await rbacRepository.GetScopeByIdAsync(scopeId, cancellationToken);
-        return scope is null ? null : new ScopeResponse(scope.Id, scope.Type.ToString());
-    }
-
-    public async Task<IEnumerable<ScopeResponse>> GetAllScopesAsync(CancellationToken cancellationToken = default)
-    {
-        var scopes = await rbacRepository.GetAllScopesAsync(cancellationToken);
-        return scopes.Select(s => new ScopeResponse(s.Id, s.Type.ToString()));
-    }
 
     // Permission
     public async Task<PermissionResponse> CreatePermissionAsync(CreatePermissionReq req, CancellationToken cancellationToken = default)
@@ -261,25 +231,14 @@ public sealed class RbacService(
         var role = await rbacRepository.GetRoleByIdAsync(req.RoleId, cancellationToken)
             ?? throw new NotFoundException("Role not found.");
 
-        var principal = await rbacRepository.GetPrincipalByIdAsync(req.PrincipalId, cancellationToken)
+        var principal = await rbacRepository.GetPrincipalByIdAsync(req.SubjectPrincipalId, cancellationToken)
             ?? throw new NotFoundException("Principal not found.");
         if (!principal.Available)
         {
             throw new BadRequestException("Unavailable principals cannot be assigned a role.");
         }
 
-        Scope scope;
-        if (req.ScopeId.HasValue)
-        {
-            scope = await rbacRepository.GetScopeByIdAsync(req.ScopeId.Value, cancellationToken)
-                ?? throw new NotFoundException("Scope not found.");
-        }
-        else
-        {
-            scope = await rbacRepository.GetOrCreateDefaultScopeAsync(cancellationToken);
-        }
-
-        var existing = await rbacRepository.GetRoleAssignmentAsync(req.PrincipalId, req.RoleId, scope.Id, cancellationToken);
+        var existing = await rbacRepository.GetRoleAssignmentAsync(req.SubjectPrincipalId, req.RoleId, req.ResourcePrincipalId, cancellationToken);
         if (existing is not null)
         {
             throw new ConflictException("Role is already assigned to this principal in the specified scope.");
@@ -289,8 +248,8 @@ public sealed class RbacService(
         {
             Id = Guid.NewGuid(),
             RoleId = role.Id,
-            PrincipalId = principal.Id,
-            ScopeId = scope.Id,
+            SubjectPrincipalId = principal.Id,
+            ResourcePrincipalId = req.ResourcePrincipalId,
             CreatedAt = timeProvider.GetUtcNow()
         };
 
@@ -299,10 +258,9 @@ public sealed class RbacService(
         return new RoleAssignmentResponse(
             assignment.Id,
             assignment.RoleId,
-            assignment.PrincipalId,
-            assignment.ScopeId,
+            assignment.SubjectPrincipalId,
+            assignment.ResourcePrincipalId,
             role.Name,
-            scope.Type.ToString(),
             assignment.CreatedAt
         );
     }
@@ -313,10 +271,9 @@ public sealed class RbacService(
         return assignments.Select(ra => new RoleAssignmentResponse(
             ra.Id,
             ra.RoleId,
-            ra.PrincipalId,
-            ra.ScopeId,
+            ra.SubjectPrincipalId,
+            ra.ResourcePrincipalId,
             ra.Role?.Name,
-            ra.Scope?.Type.ToString(),
             ra.CreatedAt
         ));
     }
@@ -327,10 +284,9 @@ public sealed class RbacService(
         return assignments.Select(ra => new RoleAssignmentResponse(
             ra.Id,
             ra.RoleId,
-            ra.PrincipalId,
-            ra.ScopeId,
+            ra.SubjectPrincipalId,
+            ra.ResourcePrincipalId,
             ra.Role?.Name,
-            ra.Scope?.Type.ToString(),
             ra.CreatedAt
         ));
     }
@@ -347,29 +303,23 @@ public sealed class RbacService(
         return true;
     }
 
-    public Task<bool> RemovePrincipalFromScopeAsync(
-        Guid principalId,
-        Guid scopeId,
-        CancellationToken cancellationToken = default) =>
-        rbacRepository.DeleteRoleAssignmentsAsync(principalId, scopeId, cancellationToken);
-
     // Authorization evaluation
     public async Task<CheckPermissionResponse> CheckPermissionAsync(
         Guid principalId,
         string permissionName,
-        Guid? scopeId = null,
+        Guid? resourcePrincipalId = null,
         CancellationToken cancellationToken = default)
     {
-        var hasPermission = await rbacRepository.HasPermissionAsync(principalId, permissionName, scopeId, cancellationToken);
-        return new CheckPermissionResponse(hasPermission, permissionName, principalId, scopeId);
+        var hasPermission = await rbacRepository.HasPermissionAsync(principalId, permissionName, resourcePrincipalId, cancellationToken);
+        return new CheckPermissionResponse(hasPermission, permissionName, principalId, resourcePrincipalId);
     }
 
     public async Task<PrincipalPermissionsResponse> GetPermissionsForPrincipalAsync(
         Guid principalId,
-        Guid? scopeId = null,
+        Guid? resourcePrincipalId = null,
         CancellationToken cancellationToken = default)
     {
-        var permissions = (await rbacRepository.GetPermissionsForPrincipalAsync(principalId, scopeId, cancellationToken)).ToArray();
+        var permissions = (await rbacRepository.GetPermissionsForPrincipalAsync(principalId, resourcePrincipalId, cancellationToken)).ToArray();
         return new PrincipalPermissionsResponse(principalId, permissions);
     }
 }

@@ -7,15 +7,9 @@ public sealed record PrincipalSearchQuery(
     string? Search = null,
     string? Cursor = null,
     [param: Range(1, 100)] int Limit = 20,
-    bool? Available = true,
-    Guid? ScopeId = null);
+    bool? Available = true);
 
 public sealed record SetPrincipalAvailabilityRequest(bool Available);
-
-public sealed record CreateScopeReq(
-    [param: Required, MaxLength(100)]
-    string Type
-);
 
 public sealed record CreatePermissionReq(
     [param: Required, MaxLength(100)]
@@ -48,6 +42,6 @@ public sealed record CreateRoleAssignmentReq(
     [param: Required]
     Guid RoleId,
     [param: Required]
-    Guid PrincipalId,
-    Guid? ScopeId = null
+    Guid SubjectPrincipalId,
+    Guid? ResourcePrincipalId = null
 );

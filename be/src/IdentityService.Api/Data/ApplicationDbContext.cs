@@ -22,11 +22,11 @@ public sealed class ApplicationDbContext(
     public DbSet<ProjectTranslation> ProjectTranslations => Set<ProjectTranslation>();
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<Principal> Principals => Set<Principal>();
-    public DbSet<Scope> Scopes => Set<Scope>();
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<RoleAssignment> RoleAssignments => Set<RoleAssignment>();
+    public DbSet<PermissionGrant> PermissionGrants => Set<PermissionGrant>();
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {

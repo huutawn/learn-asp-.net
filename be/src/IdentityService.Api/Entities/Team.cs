@@ -7,8 +7,6 @@ public sealed class Team
     public Principal Principal { get; set; } = null!;
     public string Name { get; set; } = null!;
     public string? Description { get; set; }
-    public Guid? ScopeId { get; set; }
-    public Scope? Scope { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; }
 }

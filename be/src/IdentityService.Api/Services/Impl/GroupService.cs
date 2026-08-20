@@ -6,10 +6,13 @@ using IdentityService.Api.Repositories;
 namespace IdentityService.Api.Services;
 
 public sealed class GroupService(
-    IGroupRepository groupRepository) : IGroupService
+    IGroupRepository groupRepository,
+    IMembershipRepository membershipRepository,
+    TimeProvider timeProvider) : IGroupService
 {
     public async Task<GroupResponse> CreateAsync(
         CreateGroupReq request,
+        Guid actorUserId,
         CancellationToken cancellationToken)
     {
         var name = request.Name.Trim();
@@ -23,11 +26,8 @@ public sealed class GroupService(
         {
             throw new ConflictException("A group with this name and type already exists.");
         }
-
-        if (request.ScopeId.HasValue && !await groupRepository.ScopeExistsAsync(request.ScopeId.Value, cancellationToken))
-        {
-            throw new NotFoundException("Scope not found.");
-        }
+        if (!await membershipRepository.IsAdminAsync(actorUserId, cancellationToken) && !await membershipRepository.HasPermissionAsync(actorUserId, "group.create", Guid.Empty, cancellationToken))
+            throw new ForbiddenException("Missing group.create permission.");
 
         var principalId = Guid.NewGuid();
         var group = new Group
@@ -43,11 +43,12 @@ public sealed class GroupService(
             Description = string.IsNullOrWhiteSpace(request.Description)
                 ? null
                 : request.Description.Trim(),
-            ScopeId = request.ScopeId,
             Type = type
         };
         await groupRepository.AddAsync(group, cancellationToken);
-        return new GroupResponse(group.Id, group.PrincipalId, group.Name, group.Description, group.Type, group.ScopeId);
+        membershipRepository.Add(new PrincipalMembership { UserId = actorUserId, PrincipalId = principalId, IsOwner = true, JoinedAtUtc = timeProvider.GetUtcNow() });
+        await membershipRepository.SaveChangesAsync(cancellationToken);
+        return new GroupResponse(group.Id, group.PrincipalId, group.Name, group.Description, group.Type);
     }
 
 }

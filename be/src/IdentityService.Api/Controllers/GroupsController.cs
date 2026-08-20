@@ -2,13 +2,14 @@ using IdentityService.Api.DTOs.Groups;
 using IdentityService.Api.DTOs.Members;
 using IdentityService.Api.Entities;
 using IdentityService.Api.Services;
+using IdentityService.Api.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace IdentityService.Api.Controllers;
 
 [ApiController]
-[Authorize(Roles = nameof(UserRole.Admin))]
+[Authorize]
 [Route("api/groups")]
 public sealed class GroupsController(
     IGroupService groupService,
@@ -19,7 +20,8 @@ public sealed class GroupsController(
         CreateGroupReq request,
         CancellationToken cancellationToken)
     {
-        var group = await groupService.CreateAsync(request, cancellationToken);
+        if (!User.TryGetUserId(out var actorUserId)) return Unauthorized();
+        var group = await groupService.CreateAsync(request, actorUserId, cancellationToken);
         return Created($"api/groups/{group.Id}", group);
     }
 
@@ -36,12 +38,8 @@ public sealed class GroupsController(
         SetMemberRequest request,
         CancellationToken cancellationToken)
     {
-        return await membershipService.SetMemberAsync(
-                PrincipalType.Group,
-                groupId,
-                userId,
-                request.IsMember,
-                cancellationToken)
+        if (!User.TryGetUserId(out var actorUserId)) return Unauthorized();
+        return await membershipService.SetMemberAsync(PrincipalType.Group, groupId, actorUserId, userId, request, cancellationToken)
             ? NoContent()
             : NotFound();
     }

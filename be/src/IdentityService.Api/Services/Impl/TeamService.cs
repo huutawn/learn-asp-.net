@@ -5,16 +5,18 @@ using IdentityService.Api.Repositories;
 
 namespace IdentityService.Api.Services;
 
-public sealed class TeamService(ITeamRepository teamRepository, TimeProvider timeProvider) : ITeamService
+public sealed class TeamService(
+    ITeamRepository teamRepository,
+    TimeProvider timeProvider,
+    IMembershipRepository membershipRepository) : ITeamService
 {
-    public async Task<TeamResponse> CreateAsync(CreateTeamRequest request, CancellationToken cancellationToken)
+    public async Task<TeamResponse> CreateAsync(CreateTeamRequest request, Guid actorUserId, CancellationToken cancellationToken)
     {
         var name = Required(request.Name, "Team name");
         if (await teamRepository.ExistsByNameAsync(name, null, cancellationToken))
             throw new ConflictException("A team with this name already exists.");
-        if (request.ScopeId.HasValue && !await teamRepository.ScopeExistsAsync(request.ScopeId.Value, cancellationToken))
-            throw new NotFoundException("Scope not found.");
-
+        if (!await membershipRepository.IsAdminAsync(actorUserId, cancellationToken) && !await membershipRepository.HasPermissionAsync(actorUserId, "team.create", Guid.Empty, cancellationToken))
+            throw new ForbiddenException("Missing team.create permission.");
         var now = timeProvider.GetUtcNow();
         var principalId = Guid.NewGuid();
         var team = new Team
@@ -24,11 +26,12 @@ public sealed class TeamService(ITeamRepository teamRepository, TimeProvider tim
             Principal = new Principal { Id = principalId, Type = PrincipalType.Team },
             Name = name,
             Description = Optional(request.Description),
-            ScopeId = request.ScopeId,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         };
         await teamRepository.AddAsync(team, cancellationToken);
+        membershipRepository.Add(new PrincipalMembership { UserId = actorUserId, PrincipalId = principalId, IsOwner = true, JoinedAtUtc = now });
+        await membershipRepository.SaveChangesAsync(cancellationToken);
         return Map(team);
     }
 
@@ -42,12 +45,8 @@ public sealed class TeamService(ITeamRepository teamRepository, TimeProvider tim
         var name = Required(request.Name, "Team name");
         if (await teamRepository.ExistsByNameAsync(name, id, cancellationToken))
             throw new ConflictException("A team with this name already exists.");
-        if (request.ScopeId.HasValue && !await teamRepository.ScopeExistsAsync(request.ScopeId.Value, cancellationToken))
-            throw new NotFoundException("Scope not found.");
-
         team.Name = name;
         team.Description = Optional(request.Description);
-        team.ScopeId = request.ScopeId;
         team.UpdatedAtUtc = timeProvider.GetUtcNow();
         await teamRepository.SaveChangesAsync(cancellationToken);
         return Map(team);
@@ -62,7 +61,7 @@ public sealed class TeamService(ITeamRepository teamRepository, TimeProvider tim
     }
 
     private static TeamResponse Map(Team team) => new(
-        team.Id, team.PrincipalId, team.Name, team.Description, team.ScopeId, team.CreatedAtUtc, team.UpdatedAtUtc);
+        team.Id, team.PrincipalId, team.Name, team.Description, team.CreatedAtUtc, team.UpdatedAtUtc);
 
     private static string Required(string value, string field) => string.IsNullOrWhiteSpace(value)
         ? throw new BadRequestException($"{field} is required.") : value.Trim();

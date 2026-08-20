@@ -2,13 +2,14 @@ using IdentityService.Api.DTOs.Teams;
 using IdentityService.Api.DTOs.Members;
 using IdentityService.Api.Entities;
 using IdentityService.Api.Services;
+using IdentityService.Api.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace IdentityService.Api.Controllers;
 
 [ApiController]
-[Authorize(Roles = nameof(UserRole.Admin))]
+[Authorize]
 [Route("api/teams")]
 public sealed class TeamsController(
     ITeamService teamService,
@@ -19,7 +20,8 @@ public sealed class TeamsController(
         CreateTeamRequest request,
         CancellationToken cancellationToken)
     {
-        var team = await teamService.CreateAsync(request, cancellationToken);
+        if (!User.TryGetUserId(out var actorUserId)) return Unauthorized();
+        var team = await teamService.CreateAsync(request, actorUserId, cancellationToken);
         return Created($"api/teams/{team.Id}", team);
     }
 
@@ -49,11 +51,9 @@ public sealed class TeamsController(
         Guid id,
         Guid userId,
         SetMemberRequest request,
-        CancellationToken cancellationToken) =>
-        await membershipService.SetMemberAsync(
-            PrincipalType.Team,
-            id,
-            userId,
-            request.IsMember,
-            cancellationToken) ? NoContent() : NotFound();
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var actorUserId)) return Unauthorized();
+        return await membershipService.SetMemberAsync(PrincipalType.Team, id, actorUserId, userId, request, cancellationToken) ? NoContent() : NotFound();
+    }
 }

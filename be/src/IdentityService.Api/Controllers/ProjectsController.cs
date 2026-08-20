@@ -42,7 +42,6 @@ public sealed class ProjectsController(
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken) =>
         await projectService.DeleteAsync(id, cancellationToken) ? NoContent() : NotFound();
 
-    [Authorize(Roles = nameof(UserRole.Admin))]
     [HttpGet("{id:guid}/members")]
     public async Task<IActionResult> GetMembers(
         Guid id,
@@ -51,17 +50,14 @@ public sealed class ProjectsController(
             ? Ok(members)
             : NotFound();
 
-    [Authorize(Roles = nameof(UserRole.Admin))]
     [HttpPut("{id:guid}/members/{userId:guid}")]
     public async Task<IActionResult> SetMember(
         Guid id,
         Guid userId,
         SetMemberRequest request,
-        CancellationToken cancellationToken) =>
-        await membershipService.SetMemberAsync(
-            PrincipalType.Project,
-            id,
-            userId,
-            request.IsMember,
-            cancellationToken) ? NoContent() : NotFound();
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var actorUserId)) return Unauthorized();
+        return await membershipService.SetMemberAsync(PrincipalType.Project, id, actorUserId, userId, request, cancellationToken) ? NoContent() : NotFound();
+    }
 }

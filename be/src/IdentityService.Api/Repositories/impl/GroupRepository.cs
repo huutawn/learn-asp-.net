@@ -12,9 +12,6 @@ public sealed class GroupRepository(ApplicationDbContext dbContext) : IGroupRepo
         CancellationToken cancellationToken) =>
         dbContext.Groups.AnyAsync(x => x.Name == name && x.Type == type, cancellationToken);
 
-    public Task<bool> ScopeExistsAsync(Guid scopeId, CancellationToken cancellationToken) =>
-        dbContext.Scopes.AnyAsync(x => x.Id == scopeId, cancellationToken);
-
     public async Task AddAsync(Group group, CancellationToken cancellationToken)
     {
         dbContext.Groups.Add(group);

@@ -29,9 +29,6 @@ public sealed class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .HasMaxLength(64)
             .IsRequired();
 
-        builder.Property(p => p.ScopeId)
-            .HasColumnName("scope_id");
-
         builder.Property(p => p.PrincipalId)
             .HasColumnName("principal_id")
             .IsRequired();
@@ -54,12 +51,6 @@ public sealed class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .IsRequired()
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasOne(p => p.Scope)
-            .WithMany()
-            .HasForeignKey(p => p.ScopeId)
-            .IsRequired(false)
-            .OnDelete(DeleteBehavior.SetNull);
-
         builder.HasOne(p => p.Owner)
             .WithMany()
             .HasForeignKey(p => p.OwnerId)
@@ -78,17 +69,12 @@ public sealed class TeamConfiguration : IEntityTypeConfiguration<Team>
         builder.Property(x => x.PrincipalId).HasColumnName("principal_id").IsRequired();
         builder.Property(x => x.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
         builder.Property(x => x.Description).HasColumnName("description").HasMaxLength(1_000);
-        builder.Property(x => x.ScopeId).HasColumnName("scope_id");
         builder.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").IsRequired();
         builder.Property(x => x.UpdatedAtUtc).HasColumnName("updated_at_utc").IsRequired();
         builder.HasOne(x => x.Principal)
             .WithOne(x => x.Team)
             .HasForeignKey<Team>(x => x.PrincipalId)
             .OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne(x => x.Scope)
-            .WithMany()
-            .HasForeignKey(x => x.ScopeId)
-            .OnDelete(DeleteBehavior.SetNull);
         builder.HasIndex(x => x.Name).IsUnique();
     }
 }

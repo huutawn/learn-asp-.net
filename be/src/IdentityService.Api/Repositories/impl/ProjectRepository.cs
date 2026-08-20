@@ -21,9 +21,6 @@ public sealed class ProjectRepository(ApplicationDbContext dbContext) : IProject
     public Task<bool> OwnerExistsAsync(Guid ownerId, CancellationToken cancellationToken) =>
         dbContext.Users.AnyAsync(x => x.Id == ownerId, cancellationToken);
 
-    public Task<bool> ScopeExistsAsync(Guid scopeId, CancellationToken cancellationToken) =>
-        dbContext.Scopes.AnyAsync(x => x.Id == scopeId, cancellationToken);
-
     public async Task DeleteAsync(Project project, CancellationToken cancellationToken)
     {
         dbContext.Principals.Remove(project.Principal);

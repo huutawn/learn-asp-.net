@@ -5,14 +5,9 @@ namespace IdentityService.Api.Services;
 
 public interface IMembershipService
 {
-    Task<bool> SetMemberAsync(
-        PrincipalType type,
-        Guid resourceId,
-        Guid userId,
-        bool isMember,
-        CancellationToken cancellationToken);
+    Task<bool> SetMemberAsync(PrincipalType type, Guid resourceId, Guid actorUserId, Guid userId, DTOs.Members.SetMemberRequest request, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<UserResponse>?> GetMembersAsync(
+    Task<IReadOnlyList<DTOs.Members.MemberResponse>?> GetMembersAsync(
         PrincipalType type,
         Guid resourceId,
         CancellationToken cancellationToken);

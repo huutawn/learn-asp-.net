@@ -10,8 +10,6 @@ public sealed class Project
     public Guid Id { get; set; }
 
     public string Name { get; set; } = null!;
-    public Guid? ScopeId { get; set; }
-    public Scope? Scope { get; set; }
     public Guid PrincipalId { get; set; }
     public Principal Principal { get; set; } = null!;
     public string? Description { get; set; }

@@ -10,7 +10,7 @@ public sealed class Role
     public ICollection<RolePermission> RolePermissions { get; set; }
         = new List<RolePermission>();
 
-    public ICollection<RoleAssignment> Assignments { get; set; }
+    public ICollection<RoleAssignment> SubjectAssignments { get; set; }
         = new List<RoleAssignment>();
 }
 
@@ -53,27 +53,7 @@ public sealed class Principal
     public Team? Team { get; set; }
     public Project? Project { get; set; }
 
-    public ICollection<RoleAssignment> Assignments { get; set; }
-        = new List<RoleAssignment>();
-}
-
-public enum ScopeType
-{
-    Group,
-    Team,
-    System,
-    Organization,
-    Project,
-    Environment
-}
-
-public sealed class Scope
-{
-    public Guid Id { get; set; }
-
-    public ScopeType Type { get; set; }
-
-    public ICollection<RoleAssignment> Assignments { get; set; }
+    public ICollection<RoleAssignment> SubjectAssignments { get; set; }
         = new List<RoleAssignment>();
 }
 
@@ -81,16 +61,29 @@ public sealed class RoleAssignment
 {
     public Guid Id { get; set; }
 
-    public Guid PrincipalId { get; set; }
-    public Principal Principal { get; set; } = null!;
+    public Guid SubjectPrincipalId { get; set; }
+    public Principal SubjectPrincipal { get; set; } = null!;
 
     public Guid RoleId { get; set; }
     public Role Role { get; set; } = null!;
 
-    public Guid ScopeId { get; set; }
-    public Scope Scope { get; set; } = null!;
+    public Guid? ResourcePrincipalId { get; set; }
+    public Principal? ResourcePrincipal { get; set; }
 
     public Guid? GrantedByPrincipalId { get; set; }
 
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
+public sealed class PermissionGrant
+{
+    public Guid Id { get; set; }
+    public Guid SubjectPrincipalId { get; set; }
+    public Principal SubjectPrincipal { get; set; } = null!;
+    public Guid PermissionId { get; set; }
+    public Permission Permission { get; set; } = null!;
+    public Guid? ResourcePrincipalId { get; set; }
+    public Principal? ResourcePrincipal { get; set; }
+    public Guid? GrantedByPrincipalId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }

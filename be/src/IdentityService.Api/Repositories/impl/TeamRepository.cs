@@ -21,9 +21,6 @@ public sealed class TeamRepository(ApplicationDbContext dbContext) : ITeamReposi
     public Task<Team?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
         dbContext.Teams.Include(x => x.Principal).SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
 
-    public Task<bool> ScopeExistsAsync(Guid scopeId, CancellationToken cancellationToken) =>
-        dbContext.Scopes.AnyAsync(x => x.Id == scopeId, cancellationToken);
-
     public async Task DeleteAsync(Team team, CancellationToken cancellationToken)
     {
         dbContext.Principals.Remove(team.Principal);
