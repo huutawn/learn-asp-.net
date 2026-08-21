@@ -14,7 +14,7 @@ public sealed class RequestLoggingMiddleware(
         context.Response.OnStarting(() =>
         {
             //mục đích là gì 
-            context.Response.Headers["X-Trace-Id"]  =
+            context.Response.Headers["X-Trace-Id"] =
                 context.TraceIdentifier;
             return Task.CompletedTask;
         });

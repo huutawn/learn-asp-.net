@@ -28,7 +28,7 @@ public sealed class GroupConfiguration : IEntityTypeConfiguration<Group>
             .HasColumnName("type")
             .IsRequired()
             .HasMaxLength(64);
-        
+
         builder.Property(g => g.PrincipalId)
             .HasColumnName("principal_id");
 
@@ -37,7 +37,7 @@ public sealed class GroupConfiguration : IEntityTypeConfiguration<Group>
             .HasForeignKey<Group>(g => g.PrincipalId)
             .IsRequired()
             .OnDelete(DeleteBehavior.Cascade);
-        
+
         builder.HasIndex(g => new { g.Name, g.Type }).IsUnique();
     }
 }

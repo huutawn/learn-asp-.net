@@ -32,7 +32,7 @@ public sealed class KafkaNotificationConsumerWorker(
             consumer.Subscribe(KafkaConfiguration.Topic(configuration));
             try
             {
-             while (!cancellationToken.IsCancellationRequested)
+                while (!cancellationToken.IsCancellationRequested)
                 {
                     var batch = new List<ConsumeResult<string, string>>(MaxBatchSize);
 

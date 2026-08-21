@@ -22,7 +22,7 @@ public sealed class CalendarService(
         var translations = NormalizeTranslations(request.Translations);
         var userIds = request.UserIds.Distinct().ToArray();
         var groupIds = request.GroupIds.Distinct().ToArray();
-        
+
 
         ValidateReminders(request.Reminders);
 
