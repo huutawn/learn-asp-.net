@@ -11,7 +11,8 @@ import React, {
 import { NotificationResponse } from "@/features/calendar/types/calendar.types";
 import { calendarService } from "@/features/calendar/services/calendar.service";
 import { useAuth } from "@/features/auth/context/auth-context";
-import { API_BASE_URL, STORAGE_KEYS } from "@/lib/constants";
+import { STORAGE_KEYS } from "@/lib/constants";
+import { NotificationHubService } from "@/features/notifications/services/notification-hub.service";
 
 interface NotificationContextType {
   notifications: NotificationResponse[];
@@ -33,10 +34,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [isConnected, setIsConnected] = useState(false);
   const [latestNotification, setLatestNotification] = useState<NotificationResponse | null>(null);
 
-  const socketRef = useRef<WebSocket | null>(null);
-  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const connectWebSocketRef = useRef<(() => void) | null>(null);
+  const [notificationHub] = useState(() => new NotificationHubService());
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadNotifications = useCallback(async () => {
     if (!isAuthenticated) {
@@ -55,104 +54,68 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, [isAuthenticated]);
 
-  const connectWebSocket = useCallback(() => {
-    if (typeof window === "undefined" || !isAuthenticated) return;
+  const handleNotification = useCallback((notification: NotificationResponse) => {
+    setNotifications((previous) => [
+      notification,
+      ...previous.filter((item) => item.id !== notification.id),
+    ]);
+    setUnreadCount((previous) => previous + (notification.readAt ? 0 : 1));
+    setLatestNotification(notification);
 
-    const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
-    if (!token) return;
-
-    if (socketRef.current) {
-      socketRef.current.close();
-      socketRef.current = null;
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
     }
 
-    // Convert http(s):// to ws(s)://
-    const wsBaseUrl = API_BASE_URL.replace(/^http/, "ws");
-    const wsUrl = `${wsBaseUrl}/ws/notifications?access_token=${encodeURIComponent(token)}`;
-
-    try {
-      const ws = new WebSocket(wsUrl);
-      socketRef.current = ws;
-
-      ws.onopen = () => {
-        setIsConnected(true);
-        // Start ping interval every 25 seconds
-        if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
-        pingIntervalRef.current = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "ping" }));
-          }
-        }, 25000);
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          if (payload.type === "notification" && payload.data) {
-            const newNotif = payload.data as NotificationResponse;
-            setNotifications((prev) => [newNotif, ...prev.filter((n) => n.id !== newNotif.id)]);
-            setUnreadCount((prev) => prev + 1);
-            setLatestNotification(newNotif);
-
-            // Auto dismiss toast after 8 seconds
-            setTimeout(() => {
-              setLatestNotification((current) => (current?.id === newNotif.id ? null : current));
-            }, 8000);
-          }
-        } catch {
-          // Ignored non-json message
-        }
-      };
-
-      ws.onclose = () => {
-        setIsConnected(false);
-        if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
-        // Reconnect after 3 seconds if still authenticated
-        if (isAuthenticated) {
-          if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connectWebSocketRef.current?.();
-          }, 3000);
-        }
-      };
-
-      ws.onerror = () => {
-        setIsConnected(false);
-      };
-    } catch (err) {
-      console.warn("WebSocket connection failed to initialize:", err);
-    }
-  }, [isAuthenticated]);
+    toastTimeoutRef.current = setTimeout(() => {
+      setLatestNotification((current) =>
+        current?.id === notification.id ? null : current
+      );
+    }, 8_000);
+  }, []);
 
   useEffect(() => {
-    connectWebSocketRef.current = connectWebSocket;
-  }, [connectWebSocket]);
-
-  useEffect(() => {
-    let notifyLoadTimeout: ReturnType<typeof setTimeout> | null = null;
+    let isActive = true;
 
     if (isAuthenticated) {
-      notifyLoadTimeout = setTimeout(() => {
-        void loadNotifications();
-      }, 0);
-      connectWebSocket();
+      void (async () => {
+        await notificationHub.connect({
+          accessTokenFactory: () => localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN) ?? "",
+          onNotification: (notification) => {
+            if (isActive) handleNotification(notification);
+          },
+          onConnectionStateChange: (connected) => {
+            if (isActive) setIsConnected(connected);
+          },
+          onReconnected: () => {
+            if (isActive) void loadNotifications();
+          },
+          onConnectionError: (error) => {
+            console.warn("SignalR notification hub connection failed:", error);
+          },
+        });
+
+        if (isActive) {
+          await loadNotifications();
+        }
+      })();
     } else {
-      if (socketRef.current) {
-        socketRef.current.close();
-        socketRef.current = null;
-      }
+      void notificationHub.disconnect().then(() => {
+        if (isActive) {
+          setIsConnected(false);
+          setLatestNotification(null);
+        }
+      });
     }
 
     return () => {
-      if (notifyLoadTimeout) clearTimeout(notifyLoadTimeout);
-      if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      if (socketRef.current) {
-        socketRef.current.close();
-        socketRef.current = null;
+      isActive = false;
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+        toastTimeoutRef.current = null;
       }
+      void notificationHub.disconnect();
     };
-  }, [isAuthenticated, loadNotifications, connectWebSocket]);
+  }, [handleNotification, isAuthenticated, loadNotifications, notificationHub]);
 
   const markAsRead = async (id: string) => {
     try {

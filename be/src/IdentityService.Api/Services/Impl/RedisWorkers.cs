@@ -1,6 +1,7 @@
 using IdentityService.Api.Data;
 using IdentityService.Api.DTOs.Calendar;
 using IdentityService.Api.Entities;
+using IdentityService.Api.Hub;
 using IdentityService.Api.Messaging;
 using Microsoft.EntityFrameworkCore;
 
@@ -40,7 +41,7 @@ public sealed class DelayedEmailSchedulerWorker(
 public sealed class FakeEmailWorker(
     IDelayedEmailJobQueue queue,
     IServiceScopeFactory scopeFactory,
-    INotificationWebSocketService notificationWebSocketService,
+    IHub hub,
     TimeProvider timeProvider,
     ILogger<FakeEmailWorker> logger) : BackgroundService
 {
@@ -109,8 +110,9 @@ public sealed class FakeEmailWorker(
                             notification.SentAtUtc,
                             null);
 
-                        await notificationWebSocketService.SendNotificationAsync(
+                        await hub.SendToUserAsync(
                             job.RecipientUserId,
+                            NotificationHubMethods.Notification,
                             notificationResponse,
                             stoppingToken);
                     }

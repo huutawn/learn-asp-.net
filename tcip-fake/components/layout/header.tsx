@@ -139,7 +139,7 @@ export function Header() {
           )}
         </div>
 
-        {/* Notifications Bell with Real-time WebSocket */}
+        {/* Notifications Bell with SignalR realtime updates */}
         <div className="relative" ref={notifMenuRef}>
           <button
             type="button"
@@ -165,14 +165,14 @@ export function Header() {
                   <span className="font-bold text-xs text-slate-800">
                     Thông báo ({notifications.length})
                   </span>
-                  {/* Realtime WebSocket Connection Indicator */}
+                  {/* SignalR connection indicator */}
                   <span
                     className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
                       isConnected
                         ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
                         : "bg-amber-50 text-amber-600 border border-amber-200"
                     }`}
-                    title={isConnected ? "WebSocket Đang kết nối trực tiếp" : "Đang kết nối lại..."}
+                    title={isConnected ? " đang kết nối trực tiếp" : "đang kết nối lại..."}
                   >
                     <span
                       className={`size-1.5 rounded-full ${

@@ -16,6 +16,9 @@ using System.Text.Json.Serialization;
 using IdentityService.Api.Messaging;
 using StackExchange.Redis;
 using IdentityService.Api.Security;
+using IdentityService.Api.Hub;
+using IdentityService.Api.Hub.Impl;
+using Microsoft.AspNetCore.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -67,6 +70,7 @@ builder.Services.AddSwaggerGen(options =>
   });
 builder.Services.AddProblemDetails(); // chuẩn json cho error đỡ phải config
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddSignalR();
 
 builder.Services.AddExceptionHandler<
     GlobalExceptionHandler>();
@@ -105,7 +109,8 @@ builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<IRbacService, RbacService>();
 builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
-builder.Services.AddSingleton<INotificationWebSocketService, NotificationWebSocketService>();
+builder.Services.AddSingleton<IUserIdProvider, SubjectUserIdProvider>();
+builder.Services.AddSingleton<IHub, SignalRHub>();
 builder.Services.AddScoped<ICalendarService, CalendarService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<ICalendarEventPublisher, RedisCalendarEventPublisher>();
@@ -186,7 +191,7 @@ builder.Services
             {
                 var accessToken = context.Request.Query["access_token"];
                 var path = context.HttpContext.Request.Path;
-                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/ws"))
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/notifications"))
                 {
                     context.Token = accessToken;
                 }
@@ -223,28 +228,10 @@ app.UseStatusCodePages();
 
 app.UseCors();
 
-app.UseWebSockets(new WebSocketOptions
-{
-    KeepAliveInterval = TimeSpan.FromSeconds(30)
-});
-
-app.Map("/ws/notifications", async (HttpContext context, INotificationWebSocketService webSocketService, CancellationToken cancellationToken) =>
-{
-    if (context.WebSockets.IsWebSocketRequest)
-    {
-        using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
-        await webSocketService.HandleWebSocketAsync(context, webSocket, cancellationToken);
-    }
-    else
-    {
-        context.Response.StatusCode = StatusCodes.Status400BadRequest;
-        await context.Response.WriteAsync("WebSocket connections only.");
-    }
-}).RequireAuthorization();
-
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notifications").RequireAuthorization();
 
 app.Run();
