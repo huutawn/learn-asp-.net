@@ -114,16 +114,19 @@ public sealed class ReminderSchedulerWorker(
             return;
         }
 
+        var scheduledReminderAt = reminder.NextReminderAtUtc;
         var message = new ReminderDueMessage(
             Guid.NewGuid(),
             calendarEvent.Id,
             reminder.Id,
-            reminder.NextOccurrenceStartAtUtc);
+            reminder.NextOccurrenceStartAtUtc,
+            scheduledReminderAt);
         dbContext.OutboxMessages.Add(new OutboxMessage
         {
             Id = message.MessageId,
             ReminderId = reminder.Id,
             OccurrenceStartAtUtc = reminder.NextOccurrenceStartAtUtc,
+            ScheduledReminderAtUtc = scheduledReminderAt,
             Topic = topic,
             Payload = JsonSerializer.Serialize(message),
             NextAttemptAtUtc = now,

@@ -136,6 +136,7 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
         builder.Property(x => x.EventId).HasColumnName("event_id").IsRequired();
         builder.Property(x => x.RecipientUserId).HasColumnName("recipient_user_id").IsRequired();
         builder.Property(x => x.OccurrenceStartAtUtc).HasColumnName("occurrence_start_at_utc").IsRequired();
+        builder.Property(x => x.ReminderScheduledAtUtc).HasColumnName("reminder_scheduled_at_utc").IsRequired();
         builder.Property(x => x.Title).HasColumnName("title").HasMaxLength(200).IsRequired();
         builder.Property(x => x.Description).HasColumnName("description");
         builder.Property(x => x.SentAtUtc).HasColumnName("sent_at_utc").IsRequired();
@@ -158,6 +159,7 @@ public sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outbox
         builder.Property(x => x.Id).HasColumnName("id");
         builder.Property(x => x.ReminderId).HasColumnName("reminder_id").IsRequired();
         builder.Property(x => x.OccurrenceStartAtUtc).HasColumnName("occurrence_start_at_utc").IsRequired();
+        builder.Property(x => x.ScheduledReminderAtUtc).HasColumnName("scheduled_reminder_at_utc").IsRequired();
         builder.Property(x => x.Topic).HasColumnName("topic").HasMaxLength(200).IsRequired();
         builder.Property(x => x.Payload).HasColumnName("payload").HasColumnType("jsonb").IsRequired();
         builder.Property(x => x.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(32).IsRequired();
@@ -169,6 +171,6 @@ public sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outbox
         builder.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").IsRequired();
         builder.Property(x => x.UpdatedAtUtc).HasColumnName("updated_at_utc").IsRequired();
         builder.HasIndex(x => new { x.Status, x.NextAttemptAtUtc });
-        builder.HasIndex(x => new { x.ReminderId, x.OccurrenceStartAtUtc }).IsUnique();
+        builder.HasIndex(x => new { x.ReminderId, x.OccurrenceStartAtUtc, x.ScheduledReminderAtUtc }).IsUnique();
     }
 }

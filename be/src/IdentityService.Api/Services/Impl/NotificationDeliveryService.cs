@@ -44,7 +44,11 @@ public sealed class NotificationDeliveryService(
         var recipientIds = recipients.Select(x => x.Id).ToArray();
         var keys = recipientIds.ToDictionary(
             id => id,
-            id => NotificationIdempotencyKey.Create(message.ReminderId, message.OccurrenceStartAtUtc, id));
+            id => NotificationIdempotencyKey.Create(
+                message.ReminderId,
+                message.OccurrenceStartAtUtc,
+                message.ScheduledReminderAtUtc,
+                id));
         var existingNotifications = await dbContext.Notifications
             .Where(x => keys.Values.Contains(x.IdempotencyKey))
             .ToDictionaryAsync(x => x.IdempotencyKey, cancellationToken);
@@ -65,6 +69,7 @@ public sealed class NotificationDeliveryService(
                 EventId = message.EventId,
                 RecipientUserId = recipient.Id,
                 OccurrenceStartAtUtc = message.OccurrenceStartAtUtc,
+                ReminderScheduledAtUtc = message.ScheduledReminderAtUtc,
                 Title = translation.Title,
                 Description = translation.Description,
                 SentAtUtc = now,
@@ -107,9 +112,13 @@ public sealed class NotificationDeliveryService(
 
 public static class NotificationIdempotencyKey
 {
-    public static string Create(Guid reminderId, DateTimeOffset occurrenceStartAtUtc, Guid recipientUserId)
+    public static string Create(
+        Guid reminderId,
+        DateTimeOffset occurrenceStartAtUtc,
+        DateTimeOffset scheduledReminderAtUtc,
+        Guid recipientUserId)
     {
-        var value = $"{reminderId:D}:{occurrenceStartAtUtc.UtcTicks}:{recipientUserId:D}";
+        var value = $"{reminderId:D}:{occurrenceStartAtUtc.UtcTicks}:{scheduledReminderAtUtc.UtcTicks}:{recipientUserId:D}";
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
     }
 }

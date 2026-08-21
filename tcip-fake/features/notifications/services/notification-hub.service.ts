@@ -29,6 +29,8 @@ export class NotificationHubService {
     const connection = new HubConnectionBuilder()
       .withUrl(new URL(NOTIFICATION_HUB_PATH, API_BASE_URL).toString(), {
         accessTokenFactory: options.accessTokenFactory,
+        // Authentication uses the Bearer token above; no cross-origin cookies are needed.
+        withCredentials: false,
       })
       .withAutomaticReconnect()
       .configureLogging(LogLevel.Warning)

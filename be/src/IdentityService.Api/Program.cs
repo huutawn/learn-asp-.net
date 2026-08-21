@@ -45,13 +45,26 @@ builder.Services
                 //Khi serializer enum thì hay convert sang số nguyên, nhưng vì muốn convert sang string cho đúng nghĩa thì nên 
                 allowIntegerValues: false)));
 
+var corsAllowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>()
+    ?.Where(origin => Uri.TryCreate(origin, UriKind.Absolute, out _))
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray()
+    ?? [];
+if (corsAllowedOrigins.Length == 0)
+{
+    throw new InvalidOperationException("Cors:AllowedOrigins must contain at least one absolute origin.");
+}
+
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(policy =>
+    options.AddPolicy("frontend", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(corsAllowedOrigins)
               .AllowAnyHeader()
-              .AllowAnyMethod();
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
 builder.Services.AddSwaggerGen(options =>
@@ -228,7 +241,7 @@ app.UseStatusCodePages();
 // Có thể tạm comment khi local chỉ chạy HTTP
 // app.UseHttpsRedirection();
 
-app.UseCors();
+app.UseCors("frontend");
 
 app.UseAuthentication();
 app.UseAuthorization();

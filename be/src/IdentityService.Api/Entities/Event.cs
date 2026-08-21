@@ -127,6 +127,7 @@ public sealed class Notification
     public Guid RecipientUserId { get; set; }
     public User RecipientUser { get; set; } = null!;
     public DateTimeOffset OccurrenceStartAtUtc { get; set; }
+    public DateTimeOffset ReminderScheduledAtUtc { get; set; }
     public string Title { get; set; } = null!;
     public string? Description { get; set; }
     public DateTimeOffset SentAtUtc { get; set; }
@@ -146,6 +147,7 @@ public sealed class OutboxMessage
     public Guid Id { get; set; }
     public Guid ReminderId { get; set; }
     public DateTimeOffset OccurrenceStartAtUtc { get; set; }
+    public DateTimeOffset ScheduledReminderAtUtc { get; set; }
     public string Topic { get; set; } = null!;
     public string Payload { get; set; } = null!;
     public OutboxMessageStatus Status { get; set; } = OutboxMessageStatus.Pending;

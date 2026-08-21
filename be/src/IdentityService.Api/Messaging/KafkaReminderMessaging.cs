@@ -6,7 +6,8 @@ public sealed record ReminderDueMessage(
     Guid MessageId,
     Guid EventId,
     Guid ReminderId,
-    DateTimeOffset OccurrenceStartAtUtc);
+    DateTimeOffset OccurrenceStartAtUtc,
+    DateTimeOffset ScheduledReminderAtUtc);
 
 public static class KafkaConfiguration
 {
