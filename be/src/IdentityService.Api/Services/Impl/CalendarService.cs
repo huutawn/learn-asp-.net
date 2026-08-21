@@ -1,15 +1,12 @@
 using IdentityService.Api.DTOs.Calendar;
 using IdentityService.Api.Entities;
 using IdentityService.Api.Exceptions;
-using IdentityService.Api.Messaging;
 using IdentityService.Api.Repositories;
 
 namespace IdentityService.Api.Services;
 
 public sealed class CalendarService(
     ICalendarRepository calendarRepository,
-    ICalendarEventPublisher eventPublisher,
-    IDelayedEmailJobQueue emailJobQueue,
     TimeProvider timeProvider) : ICalendarService
 {
     public async Task<CalendarEventResponse> CreateAsync(
@@ -27,10 +24,7 @@ public sealed class CalendarService(
         var groupIds = request.GroupIds.Distinct().ToArray();
         
 
-        if (request.ReminderMinutes.Any(x => x < 0 || x > 525_600))
-        {
-            throw new BadRequestException("Reminder minutes must be between zero and 525600.");
-        }
+        ValidateReminders(request.Reminders);
 
         if (!await calendarRepository.AudienceExistsAsync(
                 creatorUserId,
@@ -51,7 +45,7 @@ public sealed class CalendarService(
             EndAtUtc = endAt,
             TimeZoneId = timeZone.Id,
             IsRecurring = request.IsRecurring,
-            RecurrenceDaysCsv = string.Join(',', recurrenceDays),
+            RecurrenceWeekdays = recurrenceDays.Select(day => (short)day).ToArray(),
             RecurrenceEndAtUtc = request.RecurrenceEndAt?.ToUniversalTime(),
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -71,54 +65,21 @@ public sealed class CalendarService(
             calendarEvent.Participants.Add(new EventParticipant { Id = Guid.NewGuid(), GroupId = groupId });
         }
 
-        foreach (var minutes in request.ReminderMinutes.Distinct())
+        foreach (var reminderRequest in request.Reminders)
         {
             calendarEvent.Reminders.Add(new Reminder
             {
                 Id = Guid.NewGuid(),
-                RemindBeforeMinutes = minutes,
-                NextNotifyAtUtc = startAt.AddMinutes(-minutes),
+                RemindBeforeMinutes = reminderRequest.RemindBeforeMinutes,
+                RepeatEveryMinutes = reminderRequest.RepeatEveryMinutes,
+                NextOccurrenceStartAtUtc = startAt,
+                NextReminderAtUtc = startAt.AddMinutes(-reminderRequest.RemindBeforeMinutes),
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now
             });
         }
 
         await calendarRepository.AddEventAsync(calendarEvent, cancellationToken);
-
-        var recipientsByEvent = await calendarRepository.GetActiveRecipientsByEventAsync(
-            [calendarEvent.Id],
-            cancellationToken);
-        recipientsByEvent.TryGetValue(calendarEvent.Id, out var recipients);
-        recipients ??= [];
-
-        foreach (var reminder in calendarEvent.Reminders)
-        {
-            var notifyAtUtc = reminder.NextNotifyAtUtc;
-            foreach (var user in recipients)
-            {
-                var translation = SelectTranslation(calendarEvent.Translations, user.Language);
-                var job = new DelayedEmailJob(
-                    JobId: Guid.NewGuid(),
-                    EventId: calendarEvent.Id,
-                    ReminderId: reminder.Id,
-                    RecipientUserId: user.Id,
-                    RecipientEmail: user.Email,
-                    Title: translation.Title,
-                    Description: translation.Description,
-                    OccurrenceStartAtUtc: startAt,
-                    RemindBeforeMinutes: reminder.RemindBeforeMinutes);
-
-                await emailJobQueue.EnqueueAsync(job, notifyAtUtc, cancellationToken);
-            }
-        }
-
-        await eventPublisher.PublishAsync(
-            new CalendarEventMessage(
-                "calendar.event.created",
-                calendarEvent.Id,
-                creatorUserId,
-                now),
-            cancellationToken);
         return MapEvent(calendarEvent, "en");
     }
     public async Task<IReadOnlyCollection<CalendarEventResponse>> GetEventsByDayAsync(
@@ -173,13 +134,6 @@ public sealed class CalendarService(
         calendarEvent.Status = EventStatus.Cancelled;
         calendarEvent.UpdatedAtUtc = timeProvider.GetUtcNow();
         await calendarRepository.SaveChangesAsync(cancellationToken);
-        await eventPublisher.PublishAsync(
-            new CalendarEventMessage(
-                "calendar.event.cancelled",
-                calendarEvent.Id,
-                actorUserId,
-                calendarEvent.UpdatedAtUtc),
-            cancellationToken);
         return true;
     }
 
@@ -245,6 +199,24 @@ public sealed class CalendarService(
         }
     }
 
+    private static void ValidateReminders(IReadOnlyList<ReminderRequest> reminders)
+    {
+        if (reminders.Any(x => x.RemindBeforeMinutes is < 0 or > 525_600))
+        {
+            throw new BadRequestException("Reminder minutes must be between zero and 525600.");
+        }
+
+        if (reminders.Any(x => x.RepeatEveryMinutes is <= 0 or > 525_600))
+        {
+            throw new BadRequestException("Reminder repeat interval must be between one and 525600 minutes.");
+        }
+
+        if (reminders.GroupBy(x => (x.RemindBeforeMinutes, x.RepeatEveryMinutes)).Any(x => x.Count() > 1))
+        {
+            throw new BadRequestException("Reminder offsets and repeat intervals must be unique per event.");
+        }
+    }
+
     private static IReadOnlyList<EventTranslation> NormalizeTranslations(
         IReadOnlyList<EventTranslationRequest> requests)
     {
@@ -267,8 +239,8 @@ public sealed class CalendarService(
     private static CalendarEventResponse MapEvent(Event calendarEvent, string language)
     {
         var translation = SelectTranslation(calendarEvent.Translations, language);
-        var days = calendarEvent.RecurrenceDaysCsv.Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(x => Enum.Parse<DayOfWeek>(x, ignoreCase: true))
+        var days = calendarEvent.RecurrenceWeekdays
+            .Select(x => (DayOfWeek)x)
             .ToArray();
         return new CalendarEventResponse(
             calendarEvent.Id,
@@ -281,7 +253,11 @@ public sealed class CalendarService(
             calendarEvent.RecurrenceEndAtUtc,
             translation.Title,
             translation.Description,
-            calendarEvent.Reminders.Select(x => x.RemindBeforeMinutes).Order().ToArray());
+            calendarEvent.Reminders
+                .OrderBy(x => x.RemindBeforeMinutes)
+                .ThenBy(x => x.RepeatEveryMinutes)
+                .Select(x => new ReminderResponse(x.RemindBeforeMinutes, x.RepeatEveryMinutes))
+                .ToArray());
     }
 
     private static EventTranslation SelectTranslation(

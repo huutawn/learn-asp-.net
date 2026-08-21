@@ -29,7 +29,8 @@ public sealed class Event
     public string TimeZoneId { get; set; } = null!;
     public EventStatus Status { get; set; } = EventStatus.Active;
     public bool IsRecurring { get; set; }
-    public string RecurrenceDaysCsv { get; set; } = string.Empty;
+    // PostgreSQL weekday convention: 0 = Sunday through 6 = Saturday.
+    public short[] RecurrenceWeekdays { get; set; } = [];
     public DateTimeOffset? RecurrenceEndAtUtc { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; }
@@ -46,9 +47,7 @@ public sealed class Event
 
         var timeZone = TimeZoneInfo.FindSystemTimeZoneById(TimeZoneId);
         var localStart = TimeZoneInfo.ConvertTime(occurrenceStartUtc, timeZone).DateTime;
-        var days = RecurrenceDaysCsv.Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(day => Enum.Parse<DayOfWeek>(day, ignoreCase: true))
-            .ToHashSet();
+        var days = RecurrenceWeekdays.Select(day => (DayOfWeek)day).ToHashSet();
 
         for (var offset = 1; offset <= 7; offset++)
         {
@@ -102,7 +101,9 @@ public sealed class Reminder
     public Guid EventId { get; set; }
     public Event Event { get; set; } = null!;
     public int RemindBeforeMinutes { get; set; }
-    public DateTimeOffset NextNotifyAtUtc { get; set; }
+    public int? RepeatEveryMinutes { get; set; }
+    public DateTimeOffset NextOccurrenceStartAtUtc { get; set; }
+    public DateTimeOffset NextReminderAtUtc { get; set; }
     public ReminderStatus Status { get; set; } = ReminderStatus.Active;
     public DateTimeOffset CreatedAtUtc { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; }
@@ -130,4 +131,29 @@ public sealed class Notification
     public string? Description { get; set; }
     public DateTimeOffset SentAtUtc { get; set; }
     public DateTimeOffset? ReadAtUtc { get; set; }
+    public string IdempotencyKey { get; set; } = null!;
+}
+
+public enum OutboxMessageStatus
+{
+    Pending,
+    Publishing,
+    Published
+}
+
+public sealed class OutboxMessage
+{
+    public Guid Id { get; set; }
+    public Guid ReminderId { get; set; }
+    public DateTimeOffset OccurrenceStartAtUtc { get; set; }
+    public string Topic { get; set; } = null!;
+    public string Payload { get; set; } = null!;
+    public OutboxMessageStatus Status { get; set; } = OutboxMessageStatus.Pending;
+    public int AttemptCount { get; set; }
+    public DateTimeOffset NextAttemptAtUtc { get; set; }
+    public DateTimeOffset? PublishingLeaseExpiresAtUtc { get; set; }
+    public string? LastError { get; set; }
+    public DateTimeOffset? PublishedAtUtc { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset UpdatedAtUtc { get; set; }
 }

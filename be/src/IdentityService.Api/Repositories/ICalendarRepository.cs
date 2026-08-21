@@ -2,11 +2,6 @@ using IdentityService.Api.Entities;
 
 namespace IdentityService.Api.Repositories;
 
-public readonly record struct DeliveredNotificationKey(
-    Guid ReminderId,
-    Guid RecipientUserId,
-    DateTimeOffset OccurrenceStartAtUtc);
-
 public interface ICalendarRepository
 {
     Task<bool> AudienceExistsAsync(
@@ -28,17 +23,8 @@ public interface ICalendarRepository
         DateTimeOffset startAtUtc,
         DateTimeOffset endAtUtc,
         CancellationToken cancellationToken);
-    Task<IReadOnlyList<Reminder>> GetDueRemindersAsync(
-        DateTimeOffset now,
-        CancellationToken cancellationToken);
     Task<IReadOnlyDictionary<Guid, IReadOnlyList<User>>> GetActiveRecipientsByEventAsync(
         IReadOnlyCollection<Guid> eventIds,
         CancellationToken cancellationToken);
-    Task<ISet<DeliveredNotificationKey>> GetDeliveredNotificationKeysAsync(
-        IReadOnlyCollection<Guid> reminderIds,
-        DateTimeOffset earliestOccurrenceStartAtUtc,
-        DateTimeOffset latestOccurrenceStartAtUtc,
-        CancellationToken cancellationToken);
-    void AddNotification(Notification notification);
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }

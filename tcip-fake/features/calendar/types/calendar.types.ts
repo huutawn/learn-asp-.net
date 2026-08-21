@@ -24,7 +24,12 @@ export interface CreateEventRequest {
   translations: EventTranslationRequest[];
   userIds: string[];
   groupIds: string[];
-  reminderMinutes: number[];
+  reminders: ReminderRequest[];
+}
+
+export interface ReminderRequest {
+  remindBeforeMinutes: number;
+  repeatEveryMinutes?: number;
 }
 
 export interface CalendarEvent {
@@ -38,7 +43,7 @@ export interface CalendarEvent {
   recurrenceEndAt?: string;
   title: string;
   description?: string;
-  reminderMinutes: number[];
+  reminders: ReminderRequest[];
   color?: string; // UI accent color
   attendees?: Array<{
     id: string;

@@ -33,6 +33,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [unreadCount, setUnreadCount] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
   const [latestNotification, setLatestNotification] = useState<NotificationResponse | null>(null);
+  const notificationIdsRef = useRef(new Set<string>());
 
   const [notificationHub] = useState(() => new NotificationHubService());
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -46,6 +47,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     try {
       const items = await calendarService.getNotifications();
+      notificationIdsRef.current = new Set(items.map((item) => item.id));
       setNotifications(items);
       const unread = items.filter((n) => !n.readAt).length;
       setUnreadCount(unread);
@@ -55,11 +57,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [isAuthenticated]);
 
   const handleNotification = useCallback((notification: NotificationResponse) => {
-    setNotifications((previous) => [
-      notification,
-      ...previous.filter((item) => item.id !== notification.id),
-    ]);
-    setUnreadCount((previous) => previous + (notification.readAt ? 0 : 1));
+    const alreadyKnown = notificationIdsRef.current.has(notification.id);
+    notificationIdsRef.current.add(notification.id);
+    setNotifications((previous) => {
+      return [notification, ...previous.filter((item) => item.id !== notification.id)];
+    });
+    if (!alreadyKnown && !notification.readAt) {
+      setUnreadCount((count) => count + 1);
+    }
     setLatestNotification(notification);
 
     if (toastTimeoutRef.current) {

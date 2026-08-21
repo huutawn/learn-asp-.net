@@ -18,6 +18,7 @@ public sealed class ApplicationDbContext(
     public DbSet<EventTranslation> EventTranslations => Set<EventTranslation>();
     public DbSet<Reminder> Reminders => Set<Reminder>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectTranslation> ProjectTranslations => Set<ProjectTranslation>();
     public DbSet<Team> Teams => Set<Team>();

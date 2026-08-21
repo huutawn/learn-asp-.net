@@ -58,6 +58,8 @@ function AddEventModalDialog({
   const [isAllDay, setIsAllDay] = useState(false);
   const [enableReminder, setEnableReminder] = useState(true);
   const [reminderMinutes, setReminderMinutes] = useState(15);
+  const [repeatReminder, setRepeatReminder] = useState(false);
+  const [repeatEveryMinutes, setRepeatEveryMinutes] = useState(30);
   const [selectedWeekdays, setSelectedWeekdays] = useState<DayOfWeek[]>([]);
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>(() =>
@@ -172,7 +174,14 @@ function AddEventModalDialog({
         ],
         userIds: finalUserIds,
         groupIds: [],
-        reminderMinutes: enableReminder ? [Math.max(0, reminderMinutes)] : [],
+        reminders: enableReminder
+          ? [{
+              remindBeforeMinutes: Math.max(0, reminderMinutes),
+              repeatEveryMinutes: repeatReminder
+                ? Math.max(1, repeatEveryMinutes)
+                : undefined,
+            }]
+          : [],
       };
 
       await onSave(request);
@@ -364,6 +373,36 @@ function AddEventModalDialog({
                     ))}
                   </div>
                 </div>
+
+                <label className="flex items-center gap-2 text-[11px] text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={repeatReminder}
+                    onChange={(event) => setRepeatReminder(event.target.checked)}
+                    className="size-3.5 accent-blue-600"
+                  />
+                  Lặp lại nhắc nhở
+                </label>
+
+                {repeatReminder && (
+                  <div className="flex items-center gap-1.5">
+                    <label htmlFor="repeat-reminder-minutes" className="text-[11px] text-slate-600">
+                      Mỗi
+                    </label>
+                    <Input
+                      id="repeat-reminder-minutes"
+                      type="number"
+                      min={1}
+                      max={525600}
+                      value={repeatEveryMinutes}
+                      onChange={(event) =>
+                        setRepeatEveryMinutes(Math.max(1, parseInt(event.target.value, 10) || 1))
+                      }
+                      className="h-8 w-24 text-xs font-mono font-semibold text-slate-800 bg-white"
+                    />
+                    <span className="text-[11px] text-slate-600">phút cho đến khi sự kiện bắt đầu</span>
+                  </div>
+                )}
                 <p className="text-[10px] text-slate-400">
                   {reminderMinutes === 0
                     ? "Hệ thống sẽ gửi thông báo đúng thời điểm sự kiện bắt đầu."

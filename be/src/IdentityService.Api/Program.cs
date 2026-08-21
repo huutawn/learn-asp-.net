@@ -14,11 +14,11 @@ using IdentityService.Api.Middleware;
 using Microsoft.AspNetCore.Authorization;
 using System.Text.Json.Serialization;
 using IdentityService.Api.Messaging;
-using StackExchange.Redis;
 using IdentityService.Api.Security;
 using IdentityService.Api.Hub;
 using IdentityService.Api.Hub.Impl;
 using Microsoft.AspNetCore.SignalR;
+using Confluent.Kafka;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -70,7 +70,12 @@ builder.Services.AddSwaggerGen(options =>
   });
 builder.Services.AddProblemDetails(); // chuẩn json cho error đỡ phải config
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddSignalR();
+var signalR = builder.Services.AddSignalR();
+var signalRRedisConnection = builder.Configuration["SignalR:Redis:ConnectionString"];
+if (!string.IsNullOrWhiteSpace(signalRRedisConnection))
+{
+    signalR.AddStackExchangeRedis(signalRRedisConnection);
+}
 
 builder.Services.AddExceptionHandler<
     GlobalExceptionHandler>();
@@ -83,15 +88,6 @@ var connectionString =
 builder.Services.AddDbContext<ApplicationDbContext>(
     options => options.UseNpgsql(connectionString));
 
-var redisConnectionString =
-    builder.Configuration.GetConnectionString("Redis")
-    ?? throw new InvalidOperationException(
-        "Connection string 'Redis' not found.");
-builder.Services.AddSingleton<IConnectionMultiplexer>(
-    _ => ConnectionMultiplexer.Connect(redisConnectionString));
-//signleton instance chạy xuyên suốt, nên dùng đối với các connection như db, redis, websocket,...
-//scoped instance chạy trong 1 req sẽ tạo 1 lần có thể tái sử dụng trong req đó,
-//transient instance chạy trong 1 req nhưng mỗi lần gọi đến sẽ tạo 1 lần (khác với scoped là 1 instance được tạo 1 lần và chạy xuyên suốt req) 
 builder.Services.AddScoped<IUserRepository, UserRepository>(); //add trainsient là gì? khi nào xài? tại sao lại xài scope mà ko phải transient.
 builder.Services.AddScoped<ISessionRepository, SessionRepository>();
 builder.Services.AddScoped<IGroupRepository, GroupRepository>();
@@ -112,11 +108,17 @@ builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler
 builder.Services.AddSingleton<IUserIdProvider, SubjectUserIdProvider>();
 builder.Services.AddSingleton<IHub, SignalRHub>();
 builder.Services.AddScoped<ICalendarService, CalendarService>();
+builder.Services.AddScoped<INotificationDeliveryService, NotificationDeliveryService>();
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<ICalendarEventPublisher, RedisCalendarEventPublisher>();
-builder.Services.AddSingleton<IDelayedEmailJobQueue, RedisDelayedEmailJobQueue>();
-builder.Services.AddHostedService<DelayedEmailSchedulerWorker>();
-builder.Services.AddHostedService<FakeEmailWorker>();
+builder.Services.AddSingleton<IProducer<string, string>>(_ =>
+    new ProducerBuilder<string, string>(new ProducerConfig
+    {
+        BootstrapServers = KafkaConfiguration.BootstrapServers(builder.Configuration),
+        EnableIdempotence = true
+    }).Build());
+builder.Services.AddHostedService<ReminderSchedulerWorker>();
+builder.Services.AddHostedService<OutboxPublisherWorker>();
+builder.Services.AddHostedService<KafkaNotificationConsumerWorker>();
 
 builder.Services.AddTransient<
     IPasswordHasher<User>,

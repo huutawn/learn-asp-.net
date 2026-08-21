@@ -21,8 +21,16 @@ public sealed record CreateEventRequest
     public IReadOnlyList<EventTranslationRequest> Translations { get; init; } = [];
     public IReadOnlyList<Guid> UserIds { get; init; } = [];
     public IReadOnlyList<Guid> GroupIds { get; init; } = [];
-    public IReadOnlyList<int> ReminderMinutes { get; init; } = [];
+    public IReadOnlyList<ReminderRequest> Reminders { get; init; } = [];
 }
+
+public sealed record ReminderRequest(
+    int RemindBeforeMinutes,
+    int? RepeatEveryMinutes);
+
+public sealed record ReminderResponse(
+    int RemindBeforeMinutes,
+    int? RepeatEveryMinutes);
 
 public sealed record CalendarEventResponse(
     Guid Id,
@@ -35,7 +43,7 @@ public sealed record CalendarEventResponse(
     DateTimeOffset? RecurrenceEndAt,
     string Title,
     string? Description,
-    IReadOnlyList<int> ReminderMinutes);
+    IReadOnlyList<ReminderResponse> Reminders);
 
 public sealed record NotificationResponse(
     Guid Id,

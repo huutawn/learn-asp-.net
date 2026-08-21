@@ -61,7 +61,7 @@ public sealed class EventConfiguration : IEntityTypeConfiguration<Event>
         builder.Property(x => x.TimeZoneId).HasColumnName("timezone").HasMaxLength(128).IsRequired();
         builder.Property(x => x.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(x => x.IsRecurring).HasColumnName("is_recurring").IsRequired();
-        builder.Property(x => x.RecurrenceDaysCsv).HasColumnName("recurrence_dates").HasMaxLength(64).IsRequired();
+        builder.Property(x => x.RecurrenceWeekdays).HasColumnName("recurrence_weekdays").HasColumnType("smallint[]").IsRequired();
         builder.Property(x => x.RecurrenceEndAtUtc).HasColumnName("recurrence_end_at_utc");
         builder.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").IsRequired();
         builder.Property(x => x.UpdatedAtUtc).HasColumnName("updated_at_utc").IsRequired();
@@ -113,13 +113,15 @@ public sealed class ReminderConfiguration : IEntityTypeConfiguration<Reminder>
         builder.Property(x => x.Id).HasColumnName("id");
         builder.Property(x => x.EventId).HasColumnName("event_id").IsRequired();
         builder.Property(x => x.RemindBeforeMinutes).HasColumnName("remind_before_minutes").IsRequired();
-        builder.Property(x => x.NextNotifyAtUtc).HasColumnName("next_notify_at_utc").IsRequired();
+        builder.Property(x => x.RepeatEveryMinutes).HasColumnName("repeat_every_minutes");
+        builder.Property(x => x.NextOccurrenceStartAtUtc).HasColumnName("next_occurrence_start_at_utc").IsRequired();
+        builder.Property(x => x.NextReminderAtUtc).HasColumnName("next_reminder_at_utc").IsRequired();
         builder.Property(x => x.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").IsRequired();
         builder.Property(x => x.UpdatedAtUtc).HasColumnName("updated_at_utc").IsRequired();
         builder.HasOne(x => x.Event).WithMany(x => x.Reminders).HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasIndex(x => new { x.Status, x.NextNotifyAtUtc });
-        builder.HasIndex(x => new { x.EventId, x.RemindBeforeMinutes }).IsUnique();
+        builder.HasIndex(x => new { x.Status, x.NextReminderAtUtc });
+        builder.HasIndex(x => new { x.EventId, x.RemindBeforeMinutes, x.RepeatEveryMinutes }).IsUnique();
     }
 }
 
@@ -138,10 +140,35 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
         builder.Property(x => x.Description).HasColumnName("description");
         builder.Property(x => x.SentAtUtc).HasColumnName("sent_at_utc").IsRequired();
         builder.Property(x => x.ReadAtUtc).HasColumnName("read_at_utc");
+        builder.Property(x => x.IdempotencyKey).HasColumnName("idempotency_key").HasMaxLength(128).IsRequired();
         builder.HasOne(x => x.Reminder).WithMany().HasForeignKey(x => x.ReminderId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.Event).WithMany().HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.RecipientUser).WithMany().HasForeignKey(x => x.RecipientUserId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasIndex(x => new { x.ReminderId, x.RecipientUserId, x.OccurrenceStartAtUtc }).IsUnique();
+        builder.HasIndex(x => x.IdempotencyKey).IsUnique();
         builder.HasIndex(x => new { x.RecipientUserId, x.ReadAtUtc, x.SentAtUtc });
+    }
+}
+
+public sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessage>
+{
+    public void Configure(EntityTypeBuilder<OutboxMessage> builder)
+    {
+        builder.ToTable("outbox_messages");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).HasColumnName("id");
+        builder.Property(x => x.ReminderId).HasColumnName("reminder_id").IsRequired();
+        builder.Property(x => x.OccurrenceStartAtUtc).HasColumnName("occurrence_start_at_utc").IsRequired();
+        builder.Property(x => x.Topic).HasColumnName("topic").HasMaxLength(200).IsRequired();
+        builder.Property(x => x.Payload).HasColumnName("payload").HasColumnType("jsonb").IsRequired();
+        builder.Property(x => x.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(32).IsRequired();
+        builder.Property(x => x.AttemptCount).HasColumnName("attempt_count").IsRequired();
+        builder.Property(x => x.NextAttemptAtUtc).HasColumnName("next_attempt_at_utc").IsRequired();
+        builder.Property(x => x.PublishingLeaseExpiresAtUtc).HasColumnName("publishing_lease_expires_at_utc");
+        builder.Property(x => x.LastError).HasColumnName("last_error");
+        builder.Property(x => x.PublishedAtUtc).HasColumnName("published_at_utc");
+        builder.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").IsRequired();
+        builder.Property(x => x.UpdatedAtUtc).HasColumnName("updated_at_utc").IsRequired();
+        builder.HasIndex(x => new { x.Status, x.NextAttemptAtUtc });
+        builder.HasIndex(x => new { x.ReminderId, x.OccurrenceStartAtUtc }).IsUnique();
     }
 }

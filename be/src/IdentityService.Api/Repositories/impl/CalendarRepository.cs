@@ -93,17 +93,6 @@ public sealed class CalendarRepository(ApplicationDbContext dbContext) : ICalend
             .ToArrayAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<Reminder>> GetDueRemindersAsync(
-        DateTimeOffset now,
-        CancellationToken cancellationToken) =>
-        await dbContext.Reminders.AsSplitQuery()
-            .Include(x => x.Event).ThenInclude(x => x.Participants)
-            .Include(x => x.Event).ThenInclude(x => x.Translations)
-            .Where(x => x.Status == ReminderStatus.Active && x.NextNotifyAtUtc <= now)
-            .OrderBy(x => x.NextNotifyAtUtc)
-            .Take(100)
-            .ToArrayAsync(cancellationToken);
-
     public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<User>>> GetActiveRecipientsByEventAsync(
         IReadOnlyCollection<Guid> eventIds,
         CancellationToken cancellationToken)
@@ -143,24 +132,6 @@ public sealed class CalendarRepository(ApplicationDbContext dbContext) : ICalend
                 .Select(id => users[id])
                 .ToArray());
     }
-
-    public async Task<ISet<DeliveredNotificationKey>> GetDeliveredNotificationKeysAsync(
-        IReadOnlyCollection<Guid> reminderIds,
-        DateTimeOffset earliestOccurrenceStartAtUtc,
-        DateTimeOffset latestOccurrenceStartAtUtc,
-        CancellationToken cancellationToken) =>
-        (await dbContext.Notifications.AsNoTracking()
-            .Where(x => reminderIds.Contains(x.ReminderId) &&
-                x.OccurrenceStartAtUtc >= earliestOccurrenceStartAtUtc &&
-                x.OccurrenceStartAtUtc <= latestOccurrenceStartAtUtc)
-            .Select(x => new DeliveredNotificationKey(
-                x.ReminderId,
-                x.RecipientUserId,
-                x.OccurrenceStartAtUtc))
-            .ToArrayAsync(cancellationToken))
-        .ToHashSet();
-
-    public void AddNotification(Notification notification) => dbContext.Notifications.Add(notification);
 
     public Task SaveChangesAsync(CancellationToken cancellationToken) =>
         dbContext.SaveChangesAsync(cancellationToken);

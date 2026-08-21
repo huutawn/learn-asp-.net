@@ -55,9 +55,31 @@ Assert(resourceAuthorization.HasSucceeded);
 var adminRole = BuiltInRbacCatalog.Roles.Single(x => x.Name == BuiltInRbacCatalog.AdminRole);
 Assert(adminRole.Permissions.Count == BuiltInRbacCatalog.AllPermissions.Count);
 
+VerifyCalendarRecurrence();
+
 static void Assert(bool condition)
 {
     if (!condition) throw new InvalidOperationException("Membership check failed.");
+}
+
+static void VerifyCalendarRecurrence()
+{
+    var monday = new DateTimeOffset(2026, 8, 17, 9, 0, 0, TimeSpan.Zero);
+    var recurring = new Event
+    {
+        IsRecurring = true,
+        TimeZoneId = "UTC",
+        RecurrenceWeekdays = [(short)DayOfWeek.Monday, (short)DayOfWeek.Friday]
+    };
+
+    Assert(recurring.NextOccurrenceStartAfter(monday) ==
+        new DateTimeOffset(2026, 8, 21, 9, 0, 0, TimeSpan.Zero));
+
+    recurring.RecurrenceEndAtUtc = new DateTimeOffset(2026, 8, 20, 9, 0, 0, TimeSpan.Zero);
+    Assert(recurring.NextOccurrenceStartAfter(monday) is null);
+
+    var oneTime = new Event { IsRecurring = false, TimeZoneId = "UTC" };
+    Assert(oneTime.NextOccurrenceStartAfter(monday) is null);
 }
 
 sealed class FakeMembershipRepository(User user) : IMembershipRepository
