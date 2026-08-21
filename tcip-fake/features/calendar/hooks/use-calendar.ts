@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   CalendarEvent,
+  CalendarEventMember,
   CreateEventRequest,
   NotificationResponse,
 } from "../types/calendar.types";
@@ -167,6 +168,39 @@ export function useCalendar() {
     });
   };
 
+  const handleCancelReminder = async (eventId: string, reminderId: string) => {
+    await calendarService.cancelReminder(eventId, reminderId);
+    setEvents((previous) => previous.map((event) =>
+      event.id === eventId
+        ? {
+            ...event,
+            reminders: event.reminders.map((reminder) =>
+              reminder.id === reminderId
+                ? { ...reminder, status: "Cancelled" }
+                : reminder,
+            ),
+          }
+        : event,
+    ));
+  };
+
+  const handleAddParticipant = async (eventId: string, userId: string) => {
+    const participant = await calendarService.addParticipant(eventId, userId);
+    setEvents((previous) => previous.map((event) =>
+      event.id === eventId
+        ? {
+            ...event,
+            attendees: event.attendees.some((attendee) => attendee.id === participant.id)
+              ? event.attendees
+              : [...event.attendees, participant].sort((left, right) =>
+                  left.displayName.localeCompare(right.displayName),
+                ),
+          }
+        : event,
+    ));
+    return participant;
+  };
+
   const eventsForSelectedDate = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
@@ -226,6 +260,8 @@ export function useCalendar() {
 
     handleCreateEvent,
     handleCancelEvent,
+    handleCancelReminder,
+    handleAddParticipant,
 
     refreshEvents,
   };

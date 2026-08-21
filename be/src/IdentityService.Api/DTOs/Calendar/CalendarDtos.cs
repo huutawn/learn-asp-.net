@@ -29,8 +29,17 @@ public sealed record ReminderRequest(
     int? RepeatEveryMinutes);
 
 public sealed record ReminderResponse(
+    Guid Id,
     int RemindBeforeMinutes,
-    int? RepeatEveryMinutes);
+    int? RepeatEveryMinutes,
+    ReminderStatus Status);
+
+public sealed record CalendarEventMemberResponse(
+    Guid Id,
+    string DisplayName,
+    string Email);
+
+public sealed record AddEventParticipantRequest(Guid UserId);
 
 public sealed record CalendarEventResponse(
     Guid Id,
@@ -43,7 +52,8 @@ public sealed record CalendarEventResponse(
     DateTimeOffset? RecurrenceEndAt,
     string Title,
     string? Description,
-    IReadOnlyList<ReminderResponse> Reminders);
+    IReadOnlyList<ReminderResponse> Reminders,
+    IReadOnlyList<CalendarEventMemberResponse> Attendees);
 
 public sealed record NotificationResponse(
     Guid Id,

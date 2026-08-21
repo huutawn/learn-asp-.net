@@ -6,19 +6,22 @@ import {
   Search,
   Plus,
   Trash2,
-  Clock,
-  UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatVietnameseFullDate, formatTime } from "@/lib/date-utils";
-import { CalendarEvent } from "@/features/calendar/types/calendar.types";
+import {
+  CalendarEvent,
+  CalendarEventMember,
+} from "@/features/calendar/types/calendar.types";
+import { EventDetailsDialog } from "./event-details-dialog";
 
 interface DayCalendarViewProps {
   selectedDate: Date;
   events: CalendarEvent[];
   onOpenAddModal: () => void;
-  onDeleteEvent?: (id: string) => void;
-  onSelectDate?: (date: Date) => void;
+  onDeleteEvent: (id: string) => Promise<void>;
+  onCancelReminder: (eventId: string, reminderId: string) => Promise<void>;
+  onAddParticipant: (eventId: string, userId: string) => Promise<CalendarEventMember>;
 }
 
 const HOURS = [
@@ -46,6 +49,8 @@ export function DayCalendarView({
   events,
   onOpenAddModal,
   onDeleteEvent,
+  onCancelReminder,
+  onAddParticipant,
 }: DayCalendarViewProps) {
   const [activeEventDetails, setActiveEventDetails] = useState<CalendarEvent | null>(null);
 
@@ -146,21 +151,18 @@ export function DayCalendarView({
                             {endTime || startTime}
                           </span>
 
-                          {onDeleteEvent && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (confirm(`Bạn có chắc muốn huỷ "${evt.title}"?`)) {
-                                  onDeleteEvent(evt.id);
-                                }
-                              }}
-                              className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 transition-opacity p-0.5"
-                              title="Huỷ sự kiện"
-                            >
-                              <Trash2 className="size-3.5" />
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveEventDetails(evt);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 transition-opacity p-0.5"
+                            title="Mở chi tiết và huỷ sự kiện"
+                            aria-label={`Mở chi tiết ${evt.title}`}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
                         </div>
                       </div>
                     );
@@ -172,50 +174,36 @@ export function DayCalendarView({
         </div>
       </div>
 
-      {/* Event Details Drawer / Modal if clicked */}
-      {activeEventDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="fixed inset-0 bg-slate-900/30 backdrop-blur-2xs"
-            onClick={() => setActiveEventDetails(null)}
-          />
-          <div className="relative w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl border border-slate-100 z-10 animate-in zoom-in-95">
-            <h3 className="text-sm font-bold text-slate-900 mb-2">
-              {activeEventDetails.title}
-            </h3>
-            {activeEventDetails.description && (
-              <p className="text-xs text-slate-600 mb-3">
-                {activeEventDetails.description}
-              </p>
-            )}
-            <div className="space-y-1.5 text-xs text-slate-500 border-t border-slate-100 pt-3">
-              <div className="flex items-center gap-2">
-                <Clock className="size-3.5 text-slate-400" />
-                <span>
-                  {formatTime(activeEventDetails.startAt)}
-                  {activeEventDetails.endAt && ` - ${formatTime(activeEventDetails.endAt)}`}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <UserCheck className="size-3.5 text-slate-400" />
-                <span>
-                  {activeEventDetails.attendees?.length || 1} người tham gia
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setActiveEventDetails(null)}
-              >
-                Đóng
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <EventDetailsDialog
+        event={activeEventDetails}
+        onClose={() => setActiveEventDetails(null)}
+        onCancelEvent={onDeleteEvent}
+        onCancelReminder={async (eventId, reminderId) => {
+          await onCancelReminder(eventId, reminderId);
+          setActiveEventDetails((current) => current && current.id === eventId
+            ? {
+                ...current,
+                reminders: current.reminders.map((reminder) =>
+                  reminder.id === reminderId
+                    ? { ...reminder, status: "Cancelled" }
+                    : reminder,
+                ),
+              }
+            : current);
+        }}
+        onAddParticipant={async (eventId, userId) => {
+          const participant = await onAddParticipant(eventId, userId);
+          setActiveEventDetails((current) => current && current.id === eventId
+            ? {
+                ...current,
+                attendees: current.attendees.some((attendee) => attendee.id === participant.id)
+                  ? current.attendees
+                  : [...current.attendees, participant],
+              }
+            : current);
+          return participant;
+        }}
+      />
     </div>
   );
 }

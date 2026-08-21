@@ -13,6 +13,16 @@ public interface ICalendarRepository
     Task<User?> GetUserAsync(Guid userId, CancellationToken cancellationToken);
     Task<IReadOnlyList<Event>> GetEventsForUserAsync(Guid userId, CancellationToken cancellationToken);
     Task<Event?> GetEventForUpdateAsync(Guid eventId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<User>> SearchUsersAsync(
+        string query,
+        int limit,
+        CancellationToken cancellationToken);
+    Task<IReadOnlyList<User>> SearchUsersForEventAsync(
+        Guid eventId,
+        string query,
+        int limit,
+        CancellationToken cancellationToken);
+    Task<User?> GetUserForEventParticipantAsync(Guid userId, CancellationToken cancellationToken);
     Task<IReadOnlyList<Notification>> GetNotificationsAsync(Guid userId, CancellationToken cancellationToken);
     Task<Notification?> GetNotificationForUpdateAsync(
         Guid userId,

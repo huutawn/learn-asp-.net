@@ -80,7 +80,9 @@ public sealed class CalendarService(
         }
 
         await calendarRepository.AddEventAsync(calendarEvent, cancellationToken);
-        return MapEvent(calendarEvent, "en");
+        var createdEvent = await calendarRepository.GetEventForUpdateAsync(calendarEvent.Id, cancellationToken)
+            ?? throw new InvalidOperationException("Created calendar event could not be loaded.");
+        return MapEvent(createdEvent, "en");
     }
     public async Task<IReadOnlyCollection<CalendarEventResponse>> GetEventsByDayAsync(
         Guid userId,
@@ -132,9 +134,128 @@ public sealed class CalendarService(
         }
 
         calendarEvent.Status = EventStatus.Cancelled;
-        calendarEvent.UpdatedAtUtc = timeProvider.GetUtcNow();
+        var now = timeProvider.GetUtcNow();
+        calendarEvent.UpdatedAtUtc = now;
+        foreach (var reminder in calendarEvent.Reminders.Where(x => x.Status == ReminderStatus.Active))
+        {
+            reminder.Status = ReminderStatus.Cancelled;
+            reminder.UpdatedAtUtc = now;
+        }
         await calendarRepository.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    public async Task<bool> CancelReminderAsync(
+        Guid actorUserId,
+        Guid eventId,
+        Guid reminderId,
+        CancellationToken cancellationToken)
+    {
+        var calendarEvent = await calendarRepository.GetEventForUpdateAsync(eventId, cancellationToken);
+        if (calendarEvent is null)
+        {
+            return false;
+        }
+
+        EnsureCreator(calendarEvent, actorUserId);
+
+        var reminder = calendarEvent.Reminders.SingleOrDefault(x => x.Id == reminderId);
+        if (reminder is null)
+        {
+            return false;
+        }
+
+        reminder.Status = ReminderStatus.Cancelled;
+        reminder.UpdatedAtUtc = timeProvider.GetUtcNow();
+        await calendarRepository.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<IReadOnlyList<CalendarEventMemberResponse>?> SearchParticipantsAsync(
+        Guid actorUserId,
+        Guid eventId,
+        string query,
+        CancellationToken cancellationToken)
+    {
+        var calendarEvent = await calendarRepository.GetEventForUpdateAsync(eventId, cancellationToken);
+        if (calendarEvent is null)
+        {
+            return null;
+        }
+
+        EnsureCreator(calendarEvent, actorUserId);
+        var normalizedQuery = query.Trim();
+        if (normalizedQuery.Length < 2)
+        {
+            return [];
+        }
+
+        var users = await calendarRepository.SearchUsersForEventAsync(
+            eventId,
+            normalizedQuery,
+            20,
+            cancellationToken);
+        return users.Select(MapMember).ToArray();
+    }
+
+    public async Task<IReadOnlyList<CalendarEventMemberResponse>> SearchUsersAsync(
+        string query,
+        CancellationToken cancellationToken)
+    {
+        var normalizedQuery = query.Trim();
+        if (normalizedQuery.Length < 2)
+        {
+            return [];
+        }
+
+        var users = await calendarRepository.SearchUsersAsync(
+            normalizedQuery,
+            20,
+            cancellationToken);
+        return users.Select(MapMember).ToArray();
+    }
+
+    public async Task<CalendarEventMemberResponse?> AddParticipantAsync(
+        Guid actorUserId,
+        Guid eventId,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var calendarEvent = await calendarRepository.GetEventForUpdateAsync(eventId, cancellationToken);
+        if (calendarEvent is null)
+        {
+            return null;
+        }
+
+        EnsureCreator(calendarEvent, actorUserId);
+        if (calendarEvent.Status != EventStatus.Active)
+        {
+            throw new ConflictException("Cancelled events cannot have participants changed.");
+        }
+
+        var user = await calendarRepository.GetUserForEventParticipantAsync(userId, cancellationToken);
+        if (user is null)
+        {
+            return null;
+        }
+
+        var participant = calendarEvent.Participants.SingleOrDefault(x => x.UserId == userId);
+        if (participant is null)
+        {
+            calendarEvent.Participants.Add(new EventParticipant
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId
+            });
+        }
+        else if (participant.Status == EventParticipantStatus.Removed)
+        {
+            participant.Status = EventParticipantStatus.Active;
+        }
+
+        calendarEvent.UpdatedAtUtc = timeProvider.GetUtcNow();
+        await calendarRepository.SaveChangesAsync(cancellationToken);
+        return MapMember(user);
     }
 
     public async Task<IReadOnlyList<NotificationResponse>> GetNotificationsAsync(
@@ -256,8 +377,28 @@ public sealed class CalendarService(
             calendarEvent.Reminders
                 .OrderBy(x => x.RemindBeforeMinutes)
                 .ThenBy(x => x.RepeatEveryMinutes)
-                .Select(x => new ReminderResponse(x.RemindBeforeMinutes, x.RepeatEveryMinutes))
+                .Select(x => new ReminderResponse(
+                    x.Id,
+                    x.RemindBeforeMinutes,
+                    x.RepeatEveryMinutes,
+                    x.Status))
+                .ToArray(),
+            calendarEvent.Participants
+                .Where(x => x.Status == EventParticipantStatus.Active && x.User is not null)
+                .Select(x => MapMember(x.User!))
+                .OrderBy(x => x.DisplayName)
                 .ToArray());
+    }
+
+    private static CalendarEventMemberResponse MapMember(User user) =>
+        new(user.Id, user.DisplayName, user.Email);
+
+    private static void EnsureCreator(Event calendarEvent, Guid actorUserId)
+    {
+        if (calendarEvent.CreatedById != actorUserId)
+        {
+            throw new ForbiddenException("Only the event creator can manage participants and reminders.");
+        }
     }
 
     private static EventTranslation SelectTranslation(

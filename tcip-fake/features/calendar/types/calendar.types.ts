@@ -32,6 +32,17 @@ export interface ReminderRequest {
   repeatEveryMinutes?: number;
 }
 
+export interface EventReminder extends ReminderRequest {
+  id: string;
+  status: "Active" | "Completed" | "Cancelled";
+}
+
+export interface CalendarEventMember {
+  id: string;
+  displayName: string;
+  email: string;
+}
+
 export interface CalendarEvent {
   id: string;
   startAt: string;
@@ -43,13 +54,9 @@ export interface CalendarEvent {
   recurrenceEndAt?: string;
   title: string;
   description?: string;
-  reminders: ReminderRequest[];
+  reminders: EventReminder[];
   color?: string; // UI accent color
-  attendees?: Array<{
-    id: string;
-    name: string;
-    avatar?: string;
-  }>;
+  attendees: CalendarEventMember[];
 }
 
 export interface NotificationResponse {

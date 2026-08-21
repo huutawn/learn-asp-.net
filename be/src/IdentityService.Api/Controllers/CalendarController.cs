@@ -65,6 +65,68 @@ public sealed class CalendarController(ICalendarService calendarService) : Contr
             : NotFound();
     }
 
+    [HttpDelete("events/{eventId:guid}/reminders/{reminderId:guid}")]
+    public async Task<IActionResult> CancelReminderAsync(
+        Guid eventId,
+        Guid reminderId,
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        return await calendarService.CancelReminderAsync(userId, eventId, reminderId, cancellationToken)
+            ? NoContent()
+            : NotFound();
+    }
+
+    [HttpGet("participant-search")]
+    public async Task<ActionResult<IReadOnlyList<CalendarEventMemberResponse>>> SearchUsersAsync(
+        [FromQuery] string query,
+        CancellationToken cancellationToken)
+    {
+        return Ok(await calendarService.SearchUsersAsync(query, cancellationToken));
+    }
+
+    [HttpGet("events/{eventId:guid}/participant-search")]
+    public async Task<ActionResult<IReadOnlyList<CalendarEventMemberResponse>>> SearchParticipantsAsync(
+        Guid eventId,
+        [FromQuery] string query,
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var results = await calendarService.SearchParticipantsAsync(
+            userId,
+            eventId,
+            query,
+            cancellationToken);
+        return results is null ? NotFound() : Ok(results);
+    }
+
+    [HttpPost("events/{eventId:guid}/participants")]
+    public async Task<ActionResult<CalendarEventMemberResponse>> AddParticipantAsync(
+        Guid eventId,
+        AddEventParticipantRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var participant = await calendarService.AddParticipantAsync(
+            userId,
+            eventId,
+            request.UserId,
+            cancellationToken);
+        return participant is null ? NotFound() : Ok(participant);
+    }
+
     [HttpGet("notifications")]
     public async Task<ActionResult<IReadOnlyList<NotificationResponse>>> GetNotificationsAsync(
         CancellationToken cancellationToken)

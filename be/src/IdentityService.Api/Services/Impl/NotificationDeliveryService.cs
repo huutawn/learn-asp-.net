@@ -28,7 +28,9 @@ public sealed class NotificationDeliveryService(
         }
 
         var reminderExists = await dbContext.Reminders.AnyAsync(
-            x => x.Id == message.ReminderId && x.EventId == message.EventId,
+            x => x.Id == message.ReminderId &&
+                x.EventId == message.EventId &&
+                x.Status == ReminderStatus.Active,
             cancellationToken);
         if (!reminderExists)
         {

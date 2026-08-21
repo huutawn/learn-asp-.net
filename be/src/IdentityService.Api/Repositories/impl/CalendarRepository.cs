@@ -43,6 +43,8 @@ public sealed class CalendarRepository(ApplicationDbContext dbContext) : ICalend
         return await dbContext.Events.AsNoTracking()
             .Include(x => x.Translations)
             .Include(x => x.Reminders)
+            .Include(x => x.Participants)
+                .ThenInclude(x => x.User)
             .Where(x => x.Status == EventStatus.Active && x.Participants.Any(p =>
                 p.Status == EventParticipantStatus.Active &&
                 (p.UserId == userId || (p.GroupId != null && groupIds.Contains(p.GroupId.Value)))))
@@ -51,7 +53,50 @@ public sealed class CalendarRepository(ApplicationDbContext dbContext) : ICalend
     }
 
     public Task<Event?> GetEventForUpdateAsync(Guid eventId, CancellationToken cancellationToken) =>
-        dbContext.Events.SingleOrDefaultAsync(x => x.Id == eventId, cancellationToken);
+        dbContext.Events
+            .Include(x => x.Translations)
+            .Include(x => x.Reminders)
+            .Include(x => x.Participants)
+                .ThenInclude(x => x.User)
+            .SingleOrDefaultAsync(x => x.Id == eventId, cancellationToken);
+
+    public async Task<IReadOnlyList<User>> SearchUsersAsync(
+        string query,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        return await FindUsers(query)
+            .OrderBy(user => user.DisplayName)
+            .ThenBy(user => user.Email)
+            .Take(limit)
+            .ToArrayAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<User>> SearchUsersForEventAsync(
+        Guid eventId,
+        string query,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        return await FindUsers(query)
+            .Where(user =>
+                !dbContext.EventParticipants.Any(participant =>
+                    participant.EventId == eventId &&
+                    participant.UserId == user.Id &&
+                    participant.Status == EventParticipantStatus.Active))
+            .OrderBy(user => user.DisplayName)
+            .ThenBy(user => user.Email)
+            .Take(limit)
+            .ToArrayAsync(cancellationToken);
+    }
+
+    public Task<User?> GetUserForEventParticipantAsync(Guid userId, CancellationToken cancellationToken) =>
+        dbContext.Users.SingleOrDefaultAsync(user => user.Id == userId, cancellationToken);
+
+    private IQueryable<User> FindUsers(string query) =>
+        dbContext.Users.AsNoTracking()
+            .Where(user => EF.Functions.ILike(user.DisplayName, $"%{query}%") ||
+                           EF.Functions.ILike(user.Email, $"%{query}%"));
 
     public async Task<IReadOnlyList<Notification>> GetNotificationsAsync(
         Guid userId,
@@ -84,6 +129,8 @@ public sealed class CalendarRepository(ApplicationDbContext dbContext) : ICalend
         return await dbContext.Events.AsNoTracking()
             .Include(x => x.Translations)
             .Include(x => x.Reminders)
+            .Include(x => x.Participants)
+                .ThenInclude(x => x.User)
             .Where(x => x.Status == EventStatus.Active &&
                 x.StartAtUtc >= startAtUtc && x.StartAtUtc < endAtUtc &&
                 x.Participants.Any(p =>

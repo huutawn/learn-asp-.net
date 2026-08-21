@@ -34,8 +34,7 @@ public sealed class KafkaNotificationConsumerWorker(
             {
              while (!cancellationToken.IsCancellationRequested)
                 {
-                    var batch =
-                        new List<ConsumeResult<string, string>>(MaxBatchSize);
+                    var batch = new List<ConsumeResult<string, string>>(MaxBatchSize);
 
                     // Chờ message đầu tiên
                     batch.Add(consumer.Consume(cancellationToken));
@@ -80,11 +79,12 @@ public sealed class KafkaNotificationConsumerWorker(
 
     private async Task DeliverBatchAsync(
         IConsumer<string, string> consumer,
-        IReadOnlyCollection<ConsumeResult<string, string>> messages,
+        IReadOnlyList<ConsumeResult<string, string>> messages,
         CancellationToken cancellationToken)
     {
-        foreach (var consumed in messages.Take(MaxBatchSize))
+        for (var messageIndex = 0; messageIndex < messages.Count; messageIndex++)
         {
+            var consumed = messages[messageIndex];
             try
             {
                 var message = JsonSerializer.Deserialize<ReminderDueMessage>(consumed.Message.Value)
@@ -101,10 +101,26 @@ public sealed class KafkaNotificationConsumerWorker(
             catch (Exception exception)
             {
                 logger.LogError(exception, "Processing Kafka reminder at {TopicPartitionOffset} failed.", consumed.TopicPartitionOffset);
-                consumer.Seek(consumed.TopicPartitionOffset);
+                RewindUnprocessedMessages(consumer, messages, messageIndex);
                 await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
                 return;
             }
+        }
+    }
+
+    private static void RewindUnprocessedMessages(
+        IConsumer<string, string> consumer,
+        IReadOnlyList<ConsumeResult<string, string>> messages,
+        int firstUnprocessedIndex)
+    {
+        foreach (var partition in messages
+                     .Skip(firstUnprocessedIndex)
+                     .GroupBy(x => x.TopicPartition)
+                     .Select(group => new TopicPartitionOffset(
+                         group.Key,
+                         group.Min(x => x.Offset))))
+        {
+            consumer.Seek(partition);
         }
     }
 }

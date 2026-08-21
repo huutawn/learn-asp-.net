@@ -19,6 +19,8 @@ export default function CalendarDashboardPage() {
     setIsAddModalOpen,
     handleCreateEvent,
     handleCancelEvent,
+    handleCancelReminder,
+    handleAddParticipant,
     isLoading,
   } = useCalendar();
 
@@ -46,7 +48,8 @@ export default function CalendarDashboardPage() {
           events={eventsForSelectedDate}
           onOpenAddModal={() => setIsAddModalOpen(true)}
           onDeleteEvent={handleCancelEvent}
-          onSelectDate={setSelectedDate}
+          onCancelReminder={handleCancelReminder}
+          onAddParticipant={handleAddParticipant}
         />
       </div>
 

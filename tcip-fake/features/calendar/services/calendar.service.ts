@@ -1,6 +1,7 @@
 import { apiClient } from "@/lib/api-client";
 import {
   CalendarEvent,
+  CalendarEventMember,
   CreateEventRequest,
   NotificationResponse,
 } from "../types/calendar.types";
@@ -67,6 +68,43 @@ export const calendarService = {
 
   async cancelEvent(eventId: string): Promise<void> {
     await apiClient.delete(`/api/calendar/events/${eventId}`);
+  },
+
+  async cancelReminder(eventId: string, reminderId: string): Promise<void> {
+    await apiClient.delete(`/api/calendar/events/${eventId}/reminders/${reminderId}`);
+  },
+
+  async searchUsers(
+    query: string,
+    signal?: AbortSignal,
+  ): Promise<CalendarEventMember[]> {
+    const data = await apiClient.get<CalendarEventMember[]>(
+      `/api/calendar/participant-search?query=${encodeURIComponent(query)}`,
+      { signal },
+    );
+    return Array.isArray(data) ? data : [];
+  },
+
+  async searchParticipants(
+    eventId: string,
+    query: string,
+    signal?: AbortSignal,
+  ): Promise<CalendarEventMember[]> {
+    const data = await apiClient.get<CalendarEventMember[]>(
+      `/api/calendar/events/${eventId}/participant-search?query=${encodeURIComponent(query)}`,
+      { signal },
+    );
+    return Array.isArray(data) ? data : [];
+  },
+
+  async addParticipant(
+    eventId: string,
+    userId: string,
+  ): Promise<CalendarEventMember> {
+    return apiClient.post<CalendarEventMember>(
+      `/api/calendar/events/${eventId}/participants`,
+      { userId },
+    );
   },
 
   async getNotifications(): Promise<NotificationResponse[]> {

@@ -7,14 +7,18 @@ import {
   Users as UsersIcon,
   RotateCw,
   Bell,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
-import { CreateEventRequest, DayOfWeek } from "@/features/calendar/types/calendar.types";
+import {
+  CalendarEventMember,
+  CreateEventRequest,
+  DayOfWeek,
+} from "@/features/calendar/types/calendar.types";
 import { useAuth } from "@/features/auth/context/auth-context";
-import { userService } from "@/features/users/services/user.service";
-import { User } from "@/features/auth/types/auth.types";
+import { calendarService } from "@/features/calendar/services/calendar.service";
 import { formatLocalDateToYMD, ENGLISH_WEEKDAY_KEYS } from "@/lib/date-utils";
 
 interface AddEventModalProps {
@@ -61,10 +65,10 @@ function AddEventModalDialog({
   const [repeatReminder, setRepeatReminder] = useState(false);
   const [repeatEveryMinutes, setRepeatEveryMinutes] = useState(30);
   const [selectedWeekdays, setSelectedWeekdays] = useState<DayOfWeek[]>([]);
-  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
-  const [selectedUserIds, setSelectedUserIds] = useState<string[]>(() =>
-    user?.id ? [user.id] : []
-  );
+  const [selectedMembers, setSelectedMembers] = useState<CalendarEventMember[]>([]);
+  const [participantQuery, setParticipantQuery] = useState("");
+  const [participantResults, setParticipantResults] = useState<CalendarEventMember[]>([]);
+  const [isSearchingParticipants, setIsSearchingParticipants] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -87,19 +91,39 @@ function AddEventModalDialog({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleClose]);
 
-  // Load users on mount
   useEffect(() => {
-    let ignore = false;
-    userService
-      .getUsers({ page: 1, pageSize: 50 })
-      .then((res) => {
-        if (!ignore && res?.items) setAvailableUsers(res.items);
-      })
-      .catch(() => {});
+    if (participantQuery.trim().length < 2) {
+      setParticipantResults([]);
+      setIsSearchingParticipants(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      setIsSearchingParticipants(true);
+      calendarService.searchUsers(participantQuery.trim(), controller.signal)
+        .then((members) => {
+          if (!controller.signal.aborted) {
+            setParticipantResults(members);
+          }
+        })
+        .catch((error: { message?: string }) => {
+          if (!controller.signal.aborted) {
+            setErrorMessage(error.message ?? "Không thể tìm thành viên.");
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) {
+            setIsSearchingParticipants(false);
+          }
+        });
+    }, 250);
+
     return () => {
-      ignore = true;
+      controller.abort();
+      window.clearTimeout(timeout);
     };
-  }, []);
+  }, [participantQuery]);
 
   const toggleWeekday = (day: DayOfWeek) => {
     setSelectedWeekdays((prev) =>
@@ -108,14 +132,17 @@ function AddEventModalDialog({
   };
 
   const removeUser = (id: string) => {
-    if (id === user?.id && selectedUserIds.length === 1) return;
-    setSelectedUserIds((prev) => prev.filter((uid) => uid !== id));
+    setSelectedMembers((previous) => previous.filter((member) => member.id !== id));
   };
 
-  const addUser = (id: string) => {
-    if (!selectedUserIds.includes(id)) {
-      setSelectedUserIds((prev) => [...prev, id]);
-    }
+  const addUser = (member: CalendarEventMember) => {
+    setSelectedMembers((previous) =>
+      previous.some((selected) => selected.id === member.id) || member.id === user?.id
+        ? previous
+        : [...previous, member],
+    );
+    setParticipantQuery("");
+    setParticipantResults([]);
   };
 
   const handleSave = async (e?: React.FormEvent) => {
@@ -145,7 +172,7 @@ function AddEventModalDialog({
     }
 
     const finalUserIds = Array.from(
-      new Set([...(user?.id ? [user.id] : []), ...selectedUserIds])
+      new Set([...(user?.id ? [user.id] : []), ...selectedMembers.map((member) => member.id)])
     );
 
     const finalWeekdays: DayOfWeek[] = [...selectedWeekdays];
@@ -422,55 +449,62 @@ function AddEventModalDialog({
             </div>
 
             <div className="flex flex-wrap items-center gap-2 p-2 rounded-lg border border-slate-200 bg-slate-50/50 min-h-11">
-              {selectedUserIds.map((uid) => {
-                const isMe = uid === user?.id;
-                const matched = availableUsers.find((u) => u.id === uid);
-                const displayName = isMe
-                  ? `${user?.displayName || "Tôi"} (Bạn)`
-                  : matched?.displayName || matched?.email || "Người dùng";
-
-                return (
-                  <div
-                    key={uid}
-                    className="flex items-center gap-1.5 bg-white border border-slate-200 py-1 pl-1.5 pr-2 rounded-full shadow-2xs text-[11px] text-slate-700"
+              {user && (
+                <div className="flex items-center gap-1.5 bg-white border border-slate-200 py-1 pl-1.5 pr-2 rounded-full shadow-2xs text-[11px] text-slate-700">
+                  <Avatar fallback={user.displayName} size="sm" className="size-4 text-[9px]" />
+                  <span className="max-w-[100px] truncate">{user.displayName || "Tôi"} (Bạn)</span>
+                </div>
+              )}
+              {selectedMembers.map((member) => (
+                <div
+                  key={member.id}
+                  className="flex items-center gap-1.5 bg-white border border-slate-200 py-1 pl-1.5 pr-2 rounded-full shadow-2xs text-[11px] text-slate-700"
+                >
+                  <Avatar fallback={member.displayName} size="sm" className="size-4 text-[9px]" />
+                  <span className="max-w-[100px] truncate">{member.displayName || member.email}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeUser(member.id)}
+                    className="text-slate-400 hover:text-rose-500 cursor-pointer"
+                    aria-label={`Xoá ${member.displayName} khỏi sự kiện`}
                   >
-                    <Avatar fallback={displayName} size="sm" className="size-4 text-[9px]" />
-                    <span className="max-w-[100px] truncate">{displayName}</span>
-                    {!isMe && (
-                      <button
-                        type="button"
-                        onClick={() => removeUser(uid)}
-                        className="text-slate-400 hover:text-rose-500 cursor-pointer"
-                      >
-                        <X className="size-3" />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* Add attendee */}
-              {availableUsers.length > 0 &&
-                availableUsers.some((u) => !selectedUserIds.includes(u.id)) && (
-                  <select
-                    onChange={(e) => {
-                      if (e.target.value) addUser(e.target.value);
-                      e.target.value = "";
-                    }}
-                    defaultValue=""
-                    className="h-6 text-[11px] bg-transparent border border-dashed border-slate-300 rounded-full px-2 text-slate-500 hover:border-slate-400 cursor-pointer"
-                  >
-                    <option value="" disabled>+ Thêm người</option>
-                    {availableUsers
-                      .filter((u) => !selectedUserIds.includes(u.id))
-                      .map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.displayName || u.email}
-                        </option>
-                      ))}
-                  </select>
-                )}
+                    <X className="size-3" />
+                  </button>
+                </div>
+              ))}
             </div>
+
+            <div className="relative mt-2">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
+              <Input
+                type="search"
+                value={participantQuery}
+                onChange={(event) => setParticipantQuery(event.target.value)}
+                placeholder="Tìm người theo tên hoặc email..."
+                className="h-8 pl-8 text-xs"
+                aria-label="Tìm người tham gia"
+              />
+            </div>
+            {isSearchingParticipants && <p className="mt-2 text-[11px] text-slate-500">Đang tìm...</p>}
+            {participantQuery.trim().length >= 2 && !isSearchingParticipants && participantResults.length === 0 && (
+              <p className="mt-2 text-[11px] text-slate-500">Không tìm thấy người phù hợp.</p>
+            )}
+            {participantResults.filter((member) =>
+              member.id !== user?.id && !selectedMembers.some((selected) => selected.id === member.id),
+            ).length > 0 && (
+              <ul className="mt-2 divide-y divide-slate-100 rounded-md border border-slate-200" aria-label="Kết quả tìm người tham gia">
+                {participantResults
+                  .filter((member) =>
+                    member.id !== user?.id && !selectedMembers.some((selected) => selected.id === member.id),
+                  )
+                  .map((member) => (
+                    <li key={member.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                      <div className="min-w-0"><p className="truncate text-[11px] font-medium text-slate-700">{member.displayName}</p><p className="truncate text-[10px] text-slate-500">{member.email}</p></div>
+                      <Button type="button" size="xs" onClick={() => addUser(member)}>Thêm</Button>
+                    </li>
+                  ))}
+              </ul>
+            )}
           </div>
 
           {/* Lặp lại vào */}
