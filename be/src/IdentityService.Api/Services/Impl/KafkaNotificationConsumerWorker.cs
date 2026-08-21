@@ -32,10 +32,33 @@ public sealed class KafkaNotificationConsumerWorker(
             consumer.Subscribe(KafkaConfiguration.Topic(configuration));
             try
             {
-                while (!cancellationToken.IsCancellationRequested)
+             while (!cancellationToken.IsCancellationRequested)
                 {
-                    var consumed = consumer.Consume(cancellationToken);
-                    await DeliverBatchAsync(consumer, [consumed], cancellationToken);
+                    var batch =
+                        new List<ConsumeResult<string, string>>(MaxBatchSize);
+
+                    // Chờ message đầu tiên
+                    batch.Add(consumer.Consume(cancellationToken));
+
+                    // Sau khi có message đầu tiên,
+                    // cố lấy thêm các message đang có sẵn
+                    while (batch.Count < MaxBatchSize)
+                    {
+                        var next = consumer.Consume(
+                            TimeSpan.FromMilliseconds(50));
+
+                        if (next is null)
+                        {
+                            break;
+                        }
+
+                        batch.Add(next);
+                    }
+
+                    await DeliverBatchAsync(
+                        consumer,
+                        batch,
+                        cancellationToken);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

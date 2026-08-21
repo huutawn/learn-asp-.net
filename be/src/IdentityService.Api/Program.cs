@@ -67,6 +67,7 @@ builder.Services.AddCors(options =>
               .AllowCredentials();
     });
 });
+
 builder.Services.AddSwaggerGen(options =>
   {
       options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
